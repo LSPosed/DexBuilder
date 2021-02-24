@@ -22,7 +22,6 @@
 namespace startop {
 namespace dex {
 
-using std::shared_ptr;
 using std::string;
 
 using ::dex::kAccPublic;
@@ -104,6 +103,9 @@ std::ostream& operator<<(std::ostream& out, const Instruction::Op& opcode) {
     case Instruction::Op::kNew:
       out << "kNew";
       return out;
+    case Instruction::Op::kNewArray:
+      out << "kNewArray";
+      return out;
     case Instruction::Op::kCheckCast:
       out << "kCheckCast";
       return out;
@@ -118,6 +120,9 @@ std::ostream& operator<<(std::ostream& out, const Instruction::Op& opcode) {
       return out;
     case Instruction::Op::kSetInstanceField:
       out << "kSetInstanceField";
+      return out;
+    case Instruction::Op::kAputObject:
+      out << "kAputObject";
       return out;
   }
 }
@@ -358,17 +363,17 @@ void MethodBuilder::AddInstruction(Instruction instruction) {
 
 void MethodBuilder::BuildReturn() { AddInstruction(Instruction::OpNoArgs(Op::kReturn)); }
 
-void MethodBuilder::BuildReturn(Value src, bool is_object) {
+void MethodBuilder::BuildReturn(const Value &src, bool is_object) {
   AddInstruction(Instruction::OpWithArgs(
       is_object ? Op::kReturnObject : Op::kReturn, /*destination=*/{}, src));
 }
 
-void MethodBuilder::BuildConst4(Value target, int value) {
+void MethodBuilder::BuildConst4(const Value &target, int value) {
   assert(value < 16);
   AddInstruction(Instruction::OpWithArgs(Op::kMove, target, Value::Immediate(value)));
 }
 
-void MethodBuilder::BuildConstString(Value target, const std::string& value) {
+void MethodBuilder::BuildConstString(const Value &target, const std::string& value) {
   const ir::String* const dex_string = dex_->GetOrAddString(value);
   AddInstruction(Instruction::OpWithArgs(Op::kMove, target, Value::String(dex_string->orig_index)));
 }
@@ -405,6 +410,8 @@ void MethodBuilder::EncodeInstruction(const Instruction& instruction) {
       return EncodeBranch(::dex::Opcode::OP_IF_NEZ, instruction);
     case Instruction::Op::kNew:
       return EncodeNew(instruction);
+    case Instruction::Op::kNewArray:
+      return EncodeNewArray(instruction);
     case Instruction::Op::kCheckCast:
       return EncodeCast(instruction);
     case Instruction::Op::kGetStaticField:
@@ -412,6 +419,8 @@ void MethodBuilder::EncodeInstruction(const Instruction& instruction) {
     case Instruction::Op::kGetInstanceField:
     case Instruction::Op::kSetInstanceField:
       return EncodeFieldOp(instruction);
+    case Instruction::Op::kAputObject:
+      return EncodeAput(instruction);
   }
 }
 
@@ -564,6 +573,31 @@ void MethodBuilder::EncodeCast(const Instruction& instruction) {
   assert(RegisterValue(*instruction.dest()) < 256);
   assert(type.is_type());
   Encode21c(::dex::Opcode::OP_CHECK_CAST, RegisterValue(*instruction.dest()), type.value());
+}
+
+void MethodBuilder::EncodeNewArray(const Instruction& instruction) {
+    assert(Instruction::Op::kNewArray == instruction.opcode());
+    assert(instruction.dest().has_value());
+    assert(instruction.dest()->is_variable());
+    assert(2 == instruction.args().size());
+    const auto& args = instruction.args();
+    const Value& type = args[1];
+    Encode22c(::dex::Opcode::OP_NEW_ARRAY, RegisterValue(*instruction.dest()), RegisterValue(args[0]), type.value());
+}
+
+void MethodBuilder::EncodeAput(const Instruction& instruction) {
+    assert(Instruction::Op::kAputObject == instruction.opcode());
+    assert(instruction.dest().has_value());
+    assert(instruction.dest()->is_variable());
+    assert(2 == instruction.args().size());
+    const auto& args = instruction.args();
+    switch(instruction.opcode()) {
+      case Instruction::Op::kAputObject: {
+        Encode23x(::dex::Opcode::OP_APUT_OBJECT, RegisterValue(*instruction.dest()), RegisterValue(args[0]), RegisterValue(args[1]));
+        break;
+      }
+      default: {assert(false);}
+    }
 }
 
 void MethodBuilder::EncodeFieldOp(const Instruction& instruction) {

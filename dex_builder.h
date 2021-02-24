@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "slicer/dex_bytecode.h"
+#include "slicer/dex_format.h"
 #include "slicer/dex_ir.h"
 #include "slicer/writer.h"
 
@@ -185,10 +186,12 @@ class Instruction {
     kMove,
     kMoveObject,
     kNew,
+    kNewArray,
     kReturn,
     kReturnObject,
     kSetInstanceField,
-    kSetStaticField
+    kSetStaticField,
+    kAputObject,
   };
 
   ////////////////////////
@@ -238,21 +241,21 @@ class Instruction {
   template <typename... T>
   static inline Instruction InvokeDirectObject(size_t index_argument,
                                                std::optional<const Value> dest, Value this_arg,
-                                               T... args) {
+                                               const T&... args) {
     return Instruction{
         Op::kInvokeDirect, index_argument, /*result_is_object=*/true, dest, this_arg, args...};
   }
   // For static calls.
   template <typename... T>
   static inline Instruction InvokeStatic(size_t index_argument, std::optional<const Value> dest,
-                                         T... args) {
+                                         const T&... args) {
     return Instruction{
         Op::kInvokeStatic, index_argument, /*result_is_object=*/false, dest, args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction InvokeStaticObject(size_t index_argument,
-                                               std::optional<const Value> dest, T... args) {
+                                               std::optional<const Value> dest, const T&... args) {
     return Instruction{Op::kInvokeStatic, index_argument, /*result_is_object=*/true, dest, args...};
   }
   // For static calls.
@@ -263,20 +266,20 @@ class Instruction {
         Op::kInvokeInterface, index_argument, /*result_is_object=*/false, dest, args...};
   }
 
-  static inline Instruction GetStaticField(size_t field_id, Value dest) {
+  static inline Instruction GetStaticField(size_t field_id, const Value& dest) {
     return Instruction{Op::kGetStaticField, field_id, dest};
   }
 
-  static inline Instruction SetStaticField(size_t field_id, Value value) {
+  static inline Instruction SetStaticField(size_t field_id, const Value& value) {
     return Instruction{
         Op::kSetStaticField, field_id, /*result_is_object=*/false, /*dest=*/{}, value};
   }
 
-  static inline Instruction GetField(size_t field_id, Value dest, Value object) {
+  static inline Instruction GetField(size_t field_id, const Value& dest, const Value& object) {
     return Instruction{Op::kGetInstanceField, field_id, /*result_is_object=*/false, dest, object};
   }
 
-  static inline Instruction SetField(size_t field_id, Value object, Value value) {
+  static inline Instruction SetField(size_t field_id, const Value& object, const Value& value) {
     return Instruction{
         Op::kSetInstanceField, field_id, /*result_is_object=*/false, /*dest=*/{}, object, value};
   }
@@ -346,12 +349,14 @@ class MethodBuilder {
 
   // return-void
   void BuildReturn();
-  void BuildReturn(Value src, bool is_object = false);
+  void BuildReturn(const Value &src, bool is_object = false);
   // const/4
-  void BuildConst4(Value target, int value);
-  void BuildConstString(Value target, const std::string& value);
+  void BuildConst4(const Value &target, int value);
+  void BuildConstString(const Value &target, const std::string& value);
   template <typename... T>
-  void BuildNew(Value target, TypeDescriptor type, Prototype constructor, const T&... args);
+  void BuildNew(const Value &target, const TypeDescriptor &type, const Prototype &constructor, const T&... args);
+  void BuildNewArray(const Value &target, const TypeDescriptor &type, const Value &size);
+  void BuildAput(Instruction::Op opcode, const Value &target_array, const Value &value, const Value &index);
 
   // TODO: add builders for more instructions
 
@@ -372,6 +377,8 @@ class MethodBuilder {
   void EncodeNew(const Instruction& instruction);
   void EncodeCast(const Instruction& instruction);
   void EncodeFieldOp(const Instruction& instruction);
+  void EncodeNewArray(const Instruction& instruction);
+  void EncodeAput(const Instruction& instruction);
 
   // Low-level instruction format encoding. See
   // https://source.android.com/devices/tech/dalvik/instruction-formats for documentation of
@@ -416,6 +423,11 @@ class MethodBuilder {
     assert(IsShortRegister(b));
     buffer_.push_back((b << 12) | (a << 8) | ToBits(opcode));
     buffer_.push_back(c);
+  }
+
+  inline void Encode23x(::dex::Opcode opcode, uint8_t a, uint8_t b, uint8_t c) {
+    buffer_.push_back((a << 8) | ToBits(opcode));
+    buffer_.push_back((c << 8) | b);
   }
 
   inline void Encode32x(::dex::Opcode opcode, uint16_t a, uint16_t b) {
@@ -607,7 +619,7 @@ class DexBuilder {
 };
 
 template <typename... T>
-void MethodBuilder::BuildNew(Value target, TypeDescriptor type, Prototype constructor,
+void MethodBuilder::BuildNew(const Value &target, const TypeDescriptor &type, const Prototype &constructor,
                              const T&... args) {
   MethodDeclData constructor_data{dex_->GetOrDeclareMethod(type, "<init>", constructor)};
   // allocate the object
@@ -617,6 +629,16 @@ void MethodBuilder::BuildNew(Value target, TypeDescriptor type, Prototype constr
   // call the constructor
   AddInstruction(Instruction::InvokeDirect(constructor_data.id, /*dest=*/{}, target, args...));
 };
+
+inline void MethodBuilder::BuildNewArray(const Value &target, const TypeDescriptor &type, const Value &size) {
+  ir::Type* type_def = dex_->GetOrAddType("[" + type.descriptor());
+  AddInstruction(
+      Instruction::OpWithArgs(Instruction::Op::kNewArray, target, size, Value::Type(type_def->orig_index)));
+};
+
+inline void MethodBuilder::BuildAput(Instruction::Op opcode, const Value &target_array, const Value &value, const Value &index) {
+    AddInstruction(Instruction::OpWithArgs(opcode, value, target_array, index));
+}
 
 }  // namespace dex
 }  // namespace startop

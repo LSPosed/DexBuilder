@@ -337,9 +337,31 @@ void GenerateSimpleTestCases(const string& outdir) {
     method.Encode();
   }(setInstanceField);
 
+  MethodBuilder newArray{
+      cbuilder.CreateMethod("newArray", Prototype{TypeDescriptor::Void(), test_class})};
+  [&](MethodBuilder& method) {
+    LiveRegister index{method.AllocRegister()};
+    method.BuildConst4(index, 5);
+    LiveRegister array{method.AllocRegister()};
+    method.BuildNewArray(array, integer_type, index);
+    MethodDeclData value_of{dex_file.GetOrDeclareMethod(
+        integer_type,
+        "valueOf",
+        Prototype{integer_type, TypeDescriptor::Int()})};
+    LiveRegister object{method.AllocRegister()};
+    for (int i = 0; i < 5; ++i) {
+      method.BuildConst4(index, i);
+      method.AddInstruction(Instruction::InvokeStaticObject(value_of.id, object, index));
+      method.BuildAput(Instruction::Op::kAputObject, array, object, index);
+    }
+    method.BuildReturn();
+    method.Encode();
+  }(newArray);
+
   slicer::MemView image{dex_file.CreateImage()};
   std::ofstream out_file(outdir + "/simple.dex");
   out_file.write(image.ptr<const char>(), image.size());
+
 }
 
 int main(int argc, char** argv) {
