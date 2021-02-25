@@ -394,15 +394,15 @@ MethodBuilder ClassBuilder::CreateMethod(const std::string &name,
 FieldBuilder ClassBuilder::CreateField(const std::string &name,
                                        const TypeDescriptor &type) {
   ir::FieldDecl *decl = parent_->GetOrAddField(type_descriptor_, name, type);
-  return {this, decl};
+  return {this, class_, decl};
 }
 
 void ClassBuilder::set_source_file(const string &source) {
   class_->source_file = parent_->GetOrAddString(source);
 }
 
-FieldBuilder::FieldBuilder(ClassBuilder *parent, ir::FieldDecl *decl)
-    : parent_(parent), decl_(decl) {}
+FieldBuilder::FieldBuilder(ClassBuilder *parent, ir::Class* class_def, ir::FieldDecl *decl)
+    : parent_(parent), class_(class_def), decl_(decl) {}
 
 ir::EncodedField *FieldBuilder::Encode() {
   auto *field = dex_file()->Alloc<ir::EncodedField>();

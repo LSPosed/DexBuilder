@@ -43,6 +43,9 @@ void GenerateSimpleTestCases(const string& outdir) {
   ClassBuilder cbuilder{dex_file.MakeClass("android.startop.test.testcases.SimpleTests")};
   cbuilder.set_source_file("dex_testcase_generator.cc#GenerateSimpleTestCases");
 
+  auto a_field = cbuilder.CreateField("a", TypeDescriptor::Int);
+  a_field.Encode();
+
   // int return5() { return 5; }
   auto return5{cbuilder.CreateMethod("return5", Prototype{TypeDescriptor::Int})};
   {
