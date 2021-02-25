@@ -17,7 +17,10 @@
 #define DEX_BUILDER_H_
 
 #include <array>
+#include <bits/c++config.h>
+#include <bits/stdint-uintn.h>
 #include <forward_list>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -33,7 +36,7 @@ namespace startop {
 namespace dex {
 
 // TODO: remove this once the dex generation code is complete.
-void WriteTestDexFile(const std::string& filename);
+void WriteTestDexFile(const std::string &filename);
 
 //////////////////////////
 // Forward declarations //
@@ -46,20 +49,20 @@ class DexBuilder;
 // TrackingAllocator is destroyed. Pointers to memory allocated by this
 // allocator must not outlive the allocator.
 class TrackingAllocator : public ::dex::Writer::Allocator {
- public:
-  virtual void* Allocate(size_t size);
-  virtual void Free(void* ptr);
+public:
+  virtual void *Allocate(size_t size);
+  virtual void Free(void *ptr);
 
- private:
-  std::unordered_map<void*, std::unique_ptr<uint8_t[]>> allocations_;
+private:
+  std::unordered_map<void *, std::unique_ptr<uint8_t[]>> allocations_;
 };
 
 // Represents a DEX type descriptor.
 //
 // TODO: add a way to create a descriptor for a reference of a class type.
 class TypeDescriptor {
- public:
-  // Named constructors for base type descriptors.
+public:
+  // Well known class
   static const TypeDescriptor Int;
   static const TypeDescriptor Void;
   static const TypeDescriptor Boolean;
@@ -68,67 +71,103 @@ class TypeDescriptor {
   static const TypeDescriptor Double;
   static const TypeDescriptor Float;
   static const TypeDescriptor Long;
+  static const TypeDescriptor Short;
 
-  // Creates a type descriptor from a fully-qualified class name. For example, it turns the class
-  // name java.lang.Object into the descriptor Ljava/lang/Object.
-  static TypeDescriptor FromClassname(const std::string& name);
+  static const TypeDescriptor Object;
+  static const TypeDescriptor String;
+  static const TypeDescriptor ObjectInt;
+  static const TypeDescriptor ObjectVoid;
+  static const TypeDescriptor ObjectBoolean;
+  static const TypeDescriptor ObjectByte;
+  static const TypeDescriptor ObjectChar;
+  static const TypeDescriptor ObjectDouble;
+  static const TypeDescriptor ObjectFloat;
+  static const TypeDescriptor ObjectLong;
+  static const TypeDescriptor ObjectShort;
 
-  static TypeDescriptor ArrayOf(const TypeDescriptor& base) {
-      return TypeDescriptor{"[" + base.descriptor()};
-  }
+  // Creates a type descriptor from a fully-qualified class name. For example,
+  // it turns the class name java.lang.Object into the descriptor
+  // Ljava/lang/Object.
+  static TypeDescriptor FromClassname(const std::string &name);
+
+  TypeDescriptor ToArray() const { return TypeDescriptor{"[" + descriptor_}; }
+
+  TypeDescriptor ToBoxType() const;
+
+  TypeDescriptor ToUnBoxType() const;
 
   // Return the full descriptor, such as I or Ljava/lang/Object
-  const std::string& descriptor() const { return descriptor_; }
+  const std::string &descriptor() const { return descriptor_; }
   // Return the shorty descriptor, such as I or L
-  std::string short_descriptor() const { return descriptor().substr(0, 1); }
+  char short_descriptor() const { return descriptor_[0]; }
 
-  bool is_object() const { return short_descriptor() == "L"; }
+  bool is_object() const { return short_descriptor() == 'L'; }
 
-  bool is_array() const { return short_descriptor() == "["; }
+  bool is_array() const { return short_descriptor() == '['; }
 
-  bool operator<(const TypeDescriptor& rhs) const { return descriptor_ < rhs.descriptor_; }
+  bool is_primitive() const { return !is_object() && !is_array(); }
 
- private:
+  bool operator<(const TypeDescriptor &rhs) const {
+    return descriptor_ < rhs.descriptor_;
+  }
+
+  bool operator==(const TypeDescriptor &rhs) const {
+    return descriptor_ == rhs.descriptor_;
+  }
+
+  friend struct std::hash<TypeDescriptor>;
+
+private:
+  static const std::unordered_map<TypeDescriptor, TypeDescriptor> unbox_map;
+
   explicit TypeDescriptor(std::string descriptor) : descriptor_{descriptor} {}
 
   const std::string descriptor_;
 };
 
-// Defines a function signature. For example, Prototype{TypeDescriptor::VOID, TypeDescriptor::Int}
-// represents the function type (Int) -> Void.
+// Defines a function signature. For example, Prototype{TypeDescriptor::VOID,
+// TypeDescriptor::Int} represents the function type (Int) -> Void.
 class Prototype {
- public:
+public:
   template <typename... TypeDescriptors>
   explicit Prototype(TypeDescriptor return_type, TypeDescriptors... param_types)
       : return_type_{return_type}, param_types_{param_types...} {}
 
   // Encode this prototype into the dex file.
-  ir::Proto* Encode(DexBuilder* dex) const;
+  ir::Proto *Encode(DexBuilder *dex) const;
 
   // Get the shorty descriptor, such as VII for (Int, Int) -> Void
   std::string Shorty() const;
 
-  const TypeDescriptor& ArgType(size_t index) const;
+  const TypeDescriptor &ArgType(size_t index) const;
 
-  bool operator<(const Prototype& rhs) const {
+  bool operator<(const Prototype &rhs) const {
     return std::make_tuple(return_type_, param_types_) <
            std::make_tuple(rhs.return_type_, rhs.param_types_);
   }
 
- private:
+private:
   const TypeDescriptor return_type_;
   const std::vector<TypeDescriptor> param_types_;
 };
 
-// Represents a DEX register or constant. We separate regular registers and parameters
-// because we will not know the real parameter id until after all instructions
-// have been generated.
+// Represents a DEX register or constant. We separate regular registers and
+// parameters because we will not know the real parameter id until after all
+// instructions have been generated.
 class Value {
- public:
-  static constexpr Value Local(size_t id) { return Value{id, Kind::kLocalRegister}; }
-  static constexpr Value Parameter(size_t id) { return Value{id, Kind::kParameter}; }
-  static constexpr Value Immediate(size_t value) { return Value{value, Kind::kImmediate}; }
-  static constexpr Value String(size_t value) { return Value{value, Kind::kString}; }
+public:
+  static constexpr Value Local(size_t id) {
+    return Value{id, Kind::kLocalRegister};
+  }
+  static constexpr Value Parameter(size_t id) {
+    return Value{id, Kind::kParameter};
+  }
+  static constexpr Value Immediate(size_t value) {
+    return Value{value, Kind::kImmediate};
+  }
+  static constexpr Value String(size_t value) {
+    return Value{value, Kind::kString};
+  }
   static constexpr Value Label(size_t id) { return Value{id, Kind::kLabel}; }
   static constexpr Value Type(size_t id) { return Value{id, Kind::kType}; }
 
@@ -144,8 +183,16 @@ class Value {
 
   constexpr Value() : value_{0}, kind_{Kind::kInvalid} {}
 
- private:
-  enum class Kind { kInvalid, kLocalRegister, kParameter, kImmediate, kString, kLabel, kType };
+private:
+  enum class Kind {
+    kInvalid,
+    kLocalRegister,
+    kParameter,
+    kImmediate,
+    kString,
+    kLabel,
+    kType
+  };
 
   size_t value_;
   Kind kind_;
@@ -157,8 +204,9 @@ class Value {
 class LiveRegister {
   friend class MethodBuilder;
 
- public:
-  LiveRegister(LiveRegister&& other) : liveness_{other.liveness_}, index_{other.index_} {
+public:
+  LiveRegister(LiveRegister &&other)
+      : liveness_{other.liveness_}, index_{other.index_} {
     other.index_ = {};
   };
   ~LiveRegister() {
@@ -169,21 +217,23 @@ class LiveRegister {
 
   operator const Value() const { return Value::Local(*index_); }
 
- private:
-  LiveRegister(std::vector<bool>* liveness, size_t index) : liveness_{liveness}, index_{index} {}
+private:
+  LiveRegister(std::vector<bool> *liveness, size_t index)
+      : liveness_{liveness}, index_{index} {}
 
-  std::vector<bool>* const liveness_;
+  std::vector<bool> *const liveness_;
   std::optional<size_t> index_;
 };
 
-// A virtual instruction. We convert these to real instructions in MethodBuilder::Encode.
-// Virtual instructions are needed to keep track of information that is not known until all of the
-// code is generated. This information includes things like how many local registers are created and
+// A virtual instruction. We convert these to real instructions in
+// MethodBuilder::Encode. Virtual instructions are needed to keep track of
+// information that is not known until all of the code is generated. This
+// information includes things like how many local registers are created and
 // branch target locations.
 class Instruction {
- public:
-  // The operation performed by this instruction. These are virtual instructions that do not
-  // correspond exactly to DEX instructions.
+public:
+  // The operation performed by this instruction. These are virtual instructions
+  // that do not correspond exactly to DEX instructions.
   enum class Op {
     kBindLabel,
     kBranchEqz,
@@ -214,11 +264,13 @@ class Instruction {
   static inline Instruction OpNoArgs(Op opcode) {
     return Instruction{opcode, /*index_argument*/ 0, /*dest*/ {}};
   }
-  // For most instructions, which take some number of arguments and have an optional return value.
+  // For most instructions, which take some number of arguments and have an
+  // optional return value.
   template <typename... T>
-  static inline Instruction OpWithArgs(Op opcode, std::optional<const Value> dest,
-                                       const T&... args) {
-    return Instruction{opcode, /*index_argument=*/0, /*result_is_object=*/false, dest, args...};
+  static inline Instruction
+  OpWithArgs(Op opcode, std::optional<const Value> dest, const T &...args) {
+    return Instruction{opcode, /*index_argument=*/0, /*result_is_object=*/false,
+                       dest, args...};
   }
 
   // A cast instruction. Basically, `(type)val`
@@ -229,71 +281,86 @@ class Instruction {
 
   // For method calls.
   template <typename... T>
-  static inline Instruction InvokeVirtual(size_t index_argument, std::optional<const Value> dest,
+  static inline Instruction InvokeVirtual(size_t index_argument,
+                                          std::optional<const Value> dest,
                                           Value this_arg, T... args) {
     return Instruction{
-        Op::kInvokeVirtual, index_argument, /*result_is_object=*/false, dest, this_arg, args...};
+        Op::kInvokeVirtual, index_argument, /*result_is_object=*/false, dest,
+        this_arg,           args...};
   }
   // Returns an object
   template <typename... T>
-  static inline Instruction InvokeVirtualObject(size_t index_argument,
-                                                std::optional<const Value> dest, Value this_arg,
-                                                const T&... args) {
+  static inline Instruction
+  InvokeVirtualObject(size_t index_argument, std::optional<const Value> dest,
+                      Value this_arg, const T &...args) {
     return Instruction{
-        Op::kInvokeVirtual, index_argument, /*result_is_object=*/true, dest, this_arg, args...};
+        Op::kInvokeVirtual, index_argument, /*result_is_object=*/true, dest,
+        this_arg,           args...};
   }
   // For direct calls (basically, constructors).
   template <typename... T>
-  static inline Instruction InvokeDirect(size_t index_argument, std::optional<const Value> dest,
-                                         Value this_arg, const T&... args) {
+  static inline Instruction InvokeDirect(size_t index_argument,
+                                         std::optional<const Value> dest,
+                                         Value this_arg, const T &...args) {
     return Instruction{
-        Op::kInvokeDirect, index_argument, /*result_is_object=*/false, dest, this_arg, args...};
+        Op::kInvokeDirect, index_argument, /*result_is_object=*/false, dest,
+        this_arg,          args...};
   }
   // Returns an object
   template <typename... T>
-  static inline Instruction InvokeDirectObject(size_t index_argument,
-                                               std::optional<const Value> dest, Value this_arg,
-                                               const T&... args) {
+  static inline Instruction
+  InvokeDirectObject(size_t index_argument, std::optional<const Value> dest,
+                     Value this_arg, const T &...args) {
     return Instruction{
-        Op::kInvokeDirect, index_argument, /*result_is_object=*/true, dest, this_arg, args...};
+        Op::kInvokeDirect, index_argument, /*result_is_object=*/true, dest,
+        this_arg,          args...};
   }
   // For static calls.
   template <typename... T>
-  static inline Instruction InvokeStatic(size_t index_argument, std::optional<const Value> dest,
-                                         const T&... args) {
-    return Instruction{
-        Op::kInvokeStatic, index_argument, /*result_is_object=*/false, dest, args...};
+  static inline Instruction InvokeStatic(size_t index_argument,
+                                         std::optional<const Value> dest,
+                                         const T &...args) {
+    return Instruction{Op::kInvokeStatic, index_argument,
+                       /*result_is_object=*/false, dest, args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction InvokeStaticObject(size_t index_argument,
-                                               std::optional<const Value> dest, const T&... args) {
-    return Instruction{Op::kInvokeStatic, index_argument, /*result_is_object=*/true, dest, args...};
+                                               std::optional<const Value> dest,
+                                               const T &...args) {
+    return Instruction{Op::kInvokeStatic, index_argument,
+                       /*result_is_object=*/true, dest, args...};
   }
   // For static calls.
   template <typename... T>
-  static inline Instruction InvokeInterface(size_t index_argument, std::optional<const Value> dest,
-                                            const T&... args) {
-    return Instruction{
-        Op::kInvokeInterface, index_argument, /*result_is_object=*/false, dest, args...};
+  static inline Instruction InvokeInterface(size_t index_argument,
+                                            std::optional<const Value> dest,
+                                            const T &...args) {
+    return Instruction{Op::kInvokeInterface, index_argument,
+                       /*result_is_object=*/false, dest, args...};
   }
 
-  static inline Instruction GetStaticField(size_t field_id, const Value& dest) {
+  static inline Instruction GetStaticField(size_t field_id, const Value &dest) {
     return Instruction{Op::kGetStaticField, field_id, dest};
   }
 
-  static inline Instruction SetStaticField(size_t field_id, const Value& value) {
-    return Instruction{
-        Op::kSetStaticField, field_id, /*result_is_object=*/false, /*dest=*/{}, value};
+  static inline Instruction SetStaticField(size_t field_id,
+                                           const Value &value) {
+    return Instruction{Op::kSetStaticField, field_id,
+                       /*result_is_object=*/false, /*dest=*/{}, value};
   }
 
-  static inline Instruction GetField(size_t field_id, const Value& dest, const Value& object) {
-    return Instruction{Op::kGetInstanceField, field_id, /*result_is_object=*/false, dest, object};
+  static inline Instruction GetField(size_t field_id, const Value &dest,
+                                     const Value &object) {
+    return Instruction{Op::kGetInstanceField, field_id,
+                       /*result_is_object=*/false, dest, object};
   }
 
-  static inline Instruction SetField(size_t field_id, const Value& object, const Value& value) {
+  static inline Instruction SetField(size_t field_id, const Value &object,
+                                     const Value &value) {
     return Instruction{
-        Op::kSetInstanceField, field_id, /*result_is_object=*/false, /*dest=*/{}, object, value};
+        Op::kSetInstanceField, field_id, /*result_is_object=*/false,
+        /*dest=*/{},           object,   value};
   }
 
   ///////////////
@@ -303,25 +370,20 @@ class Instruction {
   Op opcode() const { return opcode_; }
   size_t index_argument() const { return index_argument_; }
   bool result_is_object() const { return result_is_object_; }
-  const std::optional<const Value>& dest() const { return dest_; }
-  const std::vector<Value>& args() const { return args_; }
+  const std::optional<const Value> &dest() const { return dest_; }
+  const std::vector<Value> &args() const { return args_; }
 
- private:
-  inline Instruction(Op opcode, size_t index_argument, std::optional<const Value> dest)
-      : opcode_{opcode},
-        index_argument_{index_argument},
-        result_is_object_{false},
-        dest_{dest},
-        args_{} {}
+private:
+  inline Instruction(Op opcode, size_t index_argument,
+                     std::optional<const Value> dest)
+      : opcode_{opcode}, index_argument_{index_argument},
+        result_is_object_{false}, dest_{dest}, args_{} {}
 
   template <typename... T>
   inline Instruction(Op opcode, size_t index_argument, bool result_is_object,
-                     std::optional<const Value> dest, const T&... args)
-      : opcode_{opcode},
-        index_argument_{index_argument},
-        result_is_object_{result_is_object},
-        dest_{dest},
-        args_{args...} {}
+                     std::optional<const Value> dest, const T &...args)
+      : opcode_{opcode}, index_argument_{index_argument},
+        result_is_object_{result_is_object}, dest_{dest}, args_{args...} {}
 
   const Op opcode_;
   // The index of the method to invoke, for kInvokeVirtual and similar opcodes.
@@ -332,21 +394,68 @@ class Instruction {
 };
 
 // Needed for CHECK_EQ, DCHECK_EQ, etc.
-std::ostream& operator<<(std::ostream& out, const Instruction::Op& opcode);
+std::ostream &operator<<(std::ostream &out, const Instruction::Op &opcode);
 
 // Keeps track of information needed to manipulate or call a method.
 struct MethodDeclData {
   size_t id;
-  ir::MethodDecl* decl;
+  ir::MethodDecl *decl;
+};
+
+class MethodBuilder;
+class FieldBuilder;
+// A helper to build class definitions.
+class ClassBuilder {
+public:
+  ClassBuilder(DexBuilder *parent, const std::string &name,
+               ir::Class *class_def);
+
+  void set_source_file(const std::string &source);
+
+  // Create a method with the given name and prototype. The returned
+  // MethodBuilder can be used to fill in the method body.
+  MethodBuilder CreateMethod(const std::string &name, const Prototype &prototype);
+
+  FieldBuilder CreateField(const std::string &name, const TypeDescriptor &type);
+
+  DexBuilder *parent() const { return parent_; }
+
+  const TypeDescriptor &descriptor() const { return type_descriptor_; }
+
+private:
+  static const std::unordered_map<TypeDescriptor, std::string> value_method_map;
+
+  DexBuilder *const parent_;
+  const TypeDescriptor type_descriptor_;
+  ir::Class *const class_;
+};
+
+class FieldBuilder {
+  public:
+    FieldBuilder(ClassBuilder* parent, ir::FieldDecl* decl);
+    ir::EncodedField *Encode();
+
+    ClassBuilder* parent() const { return parent_; }
+    DexBuilder* dex_file() const { return parent_->parent(); }
+
+    ::dex::u4 access_flags() const { return access_flags_; }
+    void access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; }
+
+  private:
+    ClassBuilder* parent_;
+    ir::Class *class_;
+    ir::FieldDecl *decl_;
+    ::dex::u4 access_flags_ = ::dex::kAccPublic | ::dex::kAccStatic;;
 };
 
 // Tools to help build methods and their bodies.
 class MethodBuilder {
- public:
-  MethodBuilder(DexBuilder* dex, ir::Class* class_def, ir::MethodDecl* decl);
+public:
+  MethodBuilder(ClassBuilder *parent, ir::Class *class_def,
+                ir::MethodDecl *decl);
 
   // Encode the method into DEX format.
-  ir::EncodedMethod* Encode();
+  ir::EncodedMethod *Encode();
 
   // Create a new register to be used to storing values.
   LiveRegister AllocRegister();
@@ -364,37 +473,51 @@ class MethodBuilder {
   void BuildReturn(const Value &src, bool is_object = false);
   // const/4
   void BuildConst4(const Value &target, int value);
-  void BuildConstString(const Value &target, const std::string& value);
+  void BuildConstString(const Value &target, const std::string &value);
   template <typename... T>
-  void BuildNew(const Value &target, const TypeDescriptor &type, const Prototype &constructor, const T&... args);
-  void BuildNewArray(const Value &target, const TypeDescriptor &type, const Value &size);
-  void BuildAput(Instruction::Op opcode, const Value &target_array, const Value &value, const Value &index);
+  void BuildNew(const Value &target, const TypeDescriptor &type,
+                const Prototype &constructor, const T &...args);
+  void BuildNewArray(const Value &target, const TypeDescriptor &base_type,
+                     const Value &size);
+  void BuildAput(Instruction::Op opcode, const Value &target_array,
+                 const Value &value, const Value &index);
+  void BuildBoxIfPrimitive(const Value &target, const TypeDescriptor &type,
+                           const Value &src);
+  void BuildUnBoxIfPrimitive(const Value &target, const TypeDescriptor &type,
+                             const Value &src);
 
   // TODO: add builders for more instructions
 
-  DexBuilder* dex_file() const { return dex_; }
+  DexBuilder *dex_file() const { return parent_->parent(); }
+  ClassBuilder *parent() const { return parent_; }
 
- private:
+  ::dex::u4 access_flags() const { return access_flags_; }
+  void access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; }
+
+
+private:
+  using Op = Instruction::Op;
+
   void EncodeInstructions();
-  void EncodeInstruction(const Instruction& instruction);
+  void EncodeInstruction(const Instruction &instruction);
 
-  // Encodes a return instruction. For instructions with no return value, the opcode field is
-  // ignored. Otherwise, this specifies which return instruction will be used (return,
-  // return-object, etc.)
-  void EncodeReturn(const Instruction& instruction, ::dex::Opcode opcode);
+  // Encodes a return instruction. For instructions with no return value, the
+  // opcode field is ignored. Otherwise, this specifies which return instruction
+  // will be used (return, return-object, etc.)
+  void EncodeReturn(const Instruction &instruction, ::dex::Opcode opcode);
 
-  void EncodeMove(const Instruction& instruction);
-  void EncodeInvoke(const Instruction& instruction, ::dex::Opcode opcode);
-  void EncodeBranch(::dex::Opcode op, const Instruction& instruction);
-  void EncodeNew(const Instruction& instruction);
-  void EncodeCast(const Instruction& instruction);
-  void EncodeFieldOp(const Instruction& instruction);
-  void EncodeNewArray(const Instruction& instruction);
-  void EncodeAput(const Instruction& instruction);
+  void EncodeMove(const Instruction &instruction);
+  void EncodeInvoke(const Instruction &instruction, ::dex::Opcode opcode);
+  void EncodeBranch(::dex::Opcode op, const Instruction &instruction);
+  void EncodeNew(const Instruction &instruction);
+  void EncodeCast(const Instruction &instruction);
+  void EncodeFieldOp(const Instruction &instruction);
+  void EncodeNewArray(const Instruction &instruction);
+  void EncodeAput(const Instruction &instruction);
 
   // Low-level instruction format encoding. See
-  // https://source.android.com/devices/tech/dalvik/instruction-formats for documentation of
-  // formats.
+  // https://source.android.com/devices/tech/dalvik/instruction-formats for
+  // documentation of formats.
 
   inline uint8_t ToBits(::dex::Opcode opcode) {
     static_assert(sizeof(uint8_t) == sizeof(::dex::Opcode));
@@ -429,7 +552,8 @@ class MethodBuilder {
     buffer_.push_back(b);
   }
 
-  inline void Encode22c(::dex::Opcode opcode, uint8_t a, uint8_t b, uint16_t c) {
+  inline void Encode22c(::dex::Opcode opcode, uint8_t a, uint8_t b,
+                        uint16_t c) {
     // b|a|op|bbbb
     assert(IsShortRegister(a));
     assert(IsShortRegister(b));
@@ -448,8 +572,8 @@ class MethodBuilder {
     buffer_.push_back(b);
   }
 
-  inline void Encode35c(::dex::Opcode opcode, size_t a, uint16_t b, uint8_t c, uint8_t d,
-                        uint8_t e, uint8_t f, uint8_t g) {
+  inline void Encode35c(::dex::Opcode opcode, size_t a, uint16_t b, uint8_t c,
+                        uint8_t d, uint8_t e, uint8_t f, uint8_t g) {
     // a|g|op|bbbb|f|e|d|c
 
     assert(a < 5);
@@ -463,14 +587,17 @@ class MethodBuilder {
     buffer_.push_back((f << 12) | (e << 8) | (d << 4) | c);
   }
 
-  inline void Encode3rc(::dex::Opcode opcode, size_t a, uint16_t b, uint16_t c) {
+  inline void Encode3rc(::dex::Opcode opcode, size_t a, uint16_t b,
+                        uint16_t c) {
     assert(a < 255);
     buffer_.push_back((a << 8) | ToBits(opcode));
     buffer_.push_back(b);
     buffer_.push_back(c);
   }
 
-  static constexpr bool IsShortRegister(size_t register_value) { return register_value < 16; }
+  static constexpr bool IsShortRegister(size_t register_value) {
+    return register_value < 16;
+  }
 
   // Returns an array of num_regs scratch registers. These are guaranteed to be
   // contiguous, so they are suitable for the invoke-*/range instructions.
@@ -485,19 +612,22 @@ class MethodBuilder {
   }
 
   // Converts a register or parameter to its DEX register number.
-  size_t RegisterValue(const Value& value) const;
+  size_t RegisterValue(const Value &value) const;
 
-  // Sets a label's address to the current position in the instruction buffer. If there are any
-  // forward references to the label, this function will back-patch them.
-  void BindLabel(const Value& label);
+  // Sets a label's address to the current position in the instruction buffer.
+  // If there are any forward references to the label, this function will
+  // back-patch them.
+  void BindLabel(const Value &label);
 
-  // Returns the offset of the label relative to the given instruction offset. If the label is not
-  // bound, a reference will be saved and it will automatically be patched when the label is bound.
-  ::dex::u2 LabelValue(const Value& label, size_t instruction_offset, size_t field_offset);
+  // Returns the offset of the label relative to the given instruction offset.
+  // If the label is not bound, a reference will be saved and it will
+  // automatically be patched when the label is bound.
+  ::dex::u2 LabelValue(const Value &label, size_t instruction_offset,
+                       size_t field_offset);
 
-  DexBuilder* dex_;
-  ir::Class* class_;
-  ir::MethodDecl* decl_;
+  ClassBuilder *parent_;
+  ir::Class *class_;
+  ir::MethodDecl *decl_;
 
   // A list of the instructions we will eventually encode.
   std::vector<Instruction> instructions_;
@@ -509,13 +639,11 @@ class MethodBuilder {
   // around to make legal DEX code.
   static constexpr size_t kMaxScratchRegisters = 5;
 
-  size_t NumRegisters() const {
-    return register_liveness_.size();
-  }
+  size_t NumRegisters() const { return register_liveness_.size(); }
 
-  // Stores information needed to back-patch a label once it is bound. We need to know the start of
-  // the instruction that refers to the label, and the offset to where the actual label value should
-  // go.
+  // Stores information needed to back-patch a label once it is bound. We need
+  // to know the start of the instruction that refers to the label, and the
+  // offset to where the actual label value should go.
   struct LabelReference {
     size_t instruction_offset;
     size_t field_offset;
@@ -528,131 +656,159 @@ class MethodBuilder {
 
   std::vector<LabelData> labels_;
 
-  // During encoding, keep track of the largest number of arguments needed, so we can use it for our
-  // outs count
+  // During encoding, keep track of the largest number of arguments needed, so
+  // we can use it for our outs count
   size_t max_args_{0};
 
   std::vector<bool> register_liveness_;
-};
 
-// A helper to build class definitions.
-class ClassBuilder {
- public:
-  ClassBuilder(DexBuilder* parent, const std::string& name, ir::Class* class_def);
-
-  void set_source_file(const std::string& source);
-
-  // Create a method with the given name and prototype. The returned MethodBuilder can be used to
-  // fill in the method body.
-  MethodBuilder CreateMethod(const std::string& name, Prototype prototype);
-
- private:
-  DexBuilder* const parent_;
-  const TypeDescriptor type_descriptor_;
-  ir::Class* const class_;
+  ::dex::u4 access_flags_ = ::dex::kAccPublic | ::dex::kAccStatic;;
 };
 
 // Builds Dex files from scratch.
 class DexBuilder {
- public:
+public:
   DexBuilder();
 
-  // Create an in-memory image of the DEX file that can either be loaded directly or written to a
-  // file.
+  // Create an in-memory image of the DEX file that can either be loaded
+  // directly or written to a file.
   slicer::MemView CreateImage();
 
-  template <typename T>
-  T* Alloc() {
-    return dex_file_->Alloc<T>();
-  }
+  template <typename T> T *Alloc() { return dex_file_->Alloc<T>(); }
 
-  // Find the ir::String that matches the given string, creating it if it does not exist.
-  ir::String* GetOrAddString(const std::string& string);
+  // Find the ir::String that matches the given string, creating it if it does
+  // not exist.
+  ir::String *GetOrAddString(const std::string &string);
   // Create a new class of the given name.
-  ClassBuilder MakeClass(const std::string& name);
+  ClassBuilder MakeClass(const std::string &name);
 
-  // Add a type for the given descriptor, or return the existing one if it already exists.
-  // See the TypeDescriptor class for help generating these. GetOrAddType can be used to declare
-  // imported classes.
-  ir::Type* GetOrAddType(const std::string& descriptor);
-  inline ir::Type* GetOrAddType(TypeDescriptor descriptor) {
+  // Add a type for the given descriptor, or return the existing one if it
+  // already exists. See the TypeDescriptor class for help generating these.
+  // GetOrAddType can be used to declare imported classes.
+  ir::Type *GetOrAddType(const std::string &descriptor);
+  inline ir::Type *GetOrAddType(TypeDescriptor descriptor) {
     return GetOrAddType(descriptor.descriptor());
   }
 
-  ir::FieldDecl* GetOrAddField(TypeDescriptor parent, const std::string& name, TypeDescriptor type);
+  ir::FieldDecl *GetOrAddField(TypeDescriptor parent, const std::string &name,
+                               TypeDescriptor type);
 
-  // Returns the method id for the method, creating it if it has not been created yet.
-  const MethodDeclData& GetOrDeclareMethod(TypeDescriptor type, const std::string& name,
+  // Returns the method id for the method, creating it if it has not been
+  // created yet.
+  const MethodDeclData &GetOrDeclareMethod(TypeDescriptor type,
+                                           const std::string &name,
                                            Prototype prototype);
 
   std::optional<const Prototype> GetPrototypeByMethodId(size_t method_id) const;
 
- private:
-  // Looks up the ir::Proto* corresponding to this given prototype, or creates one if it does not
-  // exist.
-  ir::Proto* GetOrEncodeProto(Prototype prototype);
+private:
+  // Looks up the ir::Proto* corresponding to this given prototype, or creates
+  // one if it does not exist.
+  ir::Proto *GetOrEncodeProto(Prototype prototype);
 
   std::shared_ptr<ir::DexFile> dex_file_;
 
   // allocator_ is needed to be able to encode the image.
   TrackingAllocator allocator_;
 
-  // We'll need to allocate buffers for all of the encoded strings we create. This is where we store
-  // all of them.
+  // We'll need to allocate buffers for all of the encoded strings we create.
+  // This is where we store all of them.
   std::vector<std::unique_ptr<uint8_t[]>> string_data_;
 
   // Keep track of what types we've defined so we can look them up later.
-  std::unordered_map<std::string, ir::Type*> types_by_descriptor_;
+  std::unordered_map<std::string, ir::Type *> types_by_descriptor_;
 
   struct MethodDescriptor {
     TypeDescriptor type;
     std::string name;
     Prototype prototype;
 
-    inline bool operator<(const MethodDescriptor& rhs) const {
+    inline bool operator<(const MethodDescriptor &rhs) const {
       return std::make_tuple(type, name, prototype) <
              std::make_tuple(rhs.type, rhs.name, rhs.prototype);
     }
   };
 
-  // Maps method declarations to their method index. This is needed to encode references to them.
-  // When we go to actually write the DEX file, slicer will re-assign these after correctly sorting
-  // the methods list.
+  // Maps method declarations to their method index. This is needed to encode
+  // references to them. When we go to actually write the DEX file, slicer will
+  // re-assign these after correctly sorting the methods list.
   std::map<MethodDescriptor, MethodDeclData> method_id_map_;
 
   // Keep track of what strings we've defined so we can look them up later.
-  std::unordered_map<std::string, ir::String*> strings_;
+  std::unordered_map<std::string, ir::String *> strings_;
 
   // Keep track of already-encoded protos.
-  std::map<Prototype, ir::Proto*> proto_map_;
+  std::map<Prototype, ir::Proto *> proto_map_;
 
   // Keep track of fields that have been declared
-  std::map<std::tuple<TypeDescriptor, std::string>, ir::FieldDecl*> field_decls_by_key_;
+  std::map<std::tuple<TypeDescriptor, std::string>, ir::FieldDecl *>
+      field_decls_by_key_;
 };
 
 template <typename... T>
-void MethodBuilder::BuildNew(const Value &target, const TypeDescriptor &type, const Prototype &constructor,
-                             const T&... args) {
-  MethodDeclData constructor_data{dex_->GetOrDeclareMethod(type, "<init>", constructor)};
+void MethodBuilder::BuildNew(const Value &target, const TypeDescriptor &type,
+                             const Prototype &constructor, const T &...args) {
+  MethodDeclData constructor_data{
+      dex_file()->GetOrDeclareMethod(type, "<init>", constructor)};
   // allocate the object
-  ir::Type* type_def = dex_->GetOrAddType(type.descriptor());
-  AddInstruction(
-      Instruction::OpWithArgs(Instruction::Op::kNew, target, Value::Type(type_def->orig_index)));
+  ir::Type *type_def = dex_file()->GetOrAddType(type.descriptor());
+  AddInstruction(Instruction::OpWithArgs(Op::kNew, target,
+                                         Value::Type(type_def->orig_index)));
   // call the constructor
-  AddInstruction(Instruction::InvokeDirect(constructor_data.id, /*dest=*/{}, target, args...));
+  AddInstruction(Instruction::InvokeDirect(constructor_data.id, /*dest=*/{},
+                                           target, args...));
 };
 
-inline void MethodBuilder::BuildNewArray(const Value &target, const TypeDescriptor &type, const Value &size) {
-  ir::Type* type_def = dex_->GetOrAddType("[" + type.descriptor());
-  AddInstruction(
-      Instruction::OpWithArgs(Instruction::Op::kNewArray, target, size, Value::Type(type_def->orig_index)));
+inline void MethodBuilder::BuildNewArray(const Value &target,
+                                         const TypeDescriptor &type,
+                                         const Value &size) {
+  ir::Type *type_def = dex_file()->GetOrAddType(type.ToArray());
+  AddInstruction(Instruction::OpWithArgs(Op::kNewArray, target, size,
+                                         Value::Type(type_def->orig_index)));
 };
 
-inline void MethodBuilder::BuildAput(Instruction::Op opcode, const Value &target_array, const Value &value, const Value &index) {
-    AddInstruction(Instruction::OpWithArgs(opcode, value, target_array, index));
+inline void MethodBuilder::BuildAput(Op opcode, const Value &target_array,
+                                     const Value &value, const Value &index) {
+  AddInstruction(Instruction::OpWithArgs(opcode, value, target_array, index));
 }
 
-}  // namespace dex
-}  // namespace startop
+inline void MethodBuilder::BuildReturn() {
+  AddInstruction(Instruction::OpNoArgs(Op::kReturn));
+}
 
-#endif  // DEX_BUILDER_H_
+inline void MethodBuilder::BuildReturn(const Value &src, bool is_object) {
+  AddInstruction(Instruction::OpWithArgs(
+      is_object ? Op::kReturnObject : Op::kReturn, /*destination=*/{}, src));
+}
+
+inline void MethodBuilder::BuildConst4(const Value &target, int value) {
+  assert(value < 16);
+  AddInstruction(
+      Instruction::OpWithArgs(Op::kMove, target, Value::Immediate(value)));
+}
+
+inline void MethodBuilder::BuildConstString(const Value &target,
+                                            const std::string &value) {
+  const ir::String *const dex_string = dex_file()->GetOrAddString(value);
+  AddInstruction(Instruction::OpWithArgs(
+      Op::kMove, target, Value::String(dex_string->orig_index)));
+}
+
+inline void MethodBuilder::EncodeInstructions() {
+  buffer_.clear();
+  for (const auto &instruction : instructions_) {
+    EncodeInstruction(instruction);
+  }
+}
+} // namespace dex
+} // namespace startop
+
+namespace std {
+template <> struct hash<startop::dex::TypeDescriptor> {
+  std::size_t operator()(const startop::dex::TypeDescriptor &s) const {
+    return std::hash<std::string>{}(s.descriptor_);
+  }
+};
+} // namespace std
+
+#endif // DEX_BUILDER_H_

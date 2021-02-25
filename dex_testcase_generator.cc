@@ -44,7 +44,7 @@ void GenerateSimpleTestCases(const string& outdir) {
   cbuilder.set_source_file("dex_testcase_generator.cc#GenerateSimpleTestCases");
 
   // int return5() { return 5; }
-  auto return5{cbuilder.CreateMethod("return5", Prototype{TypeDescriptor::Int()})};
+  auto return5{cbuilder.CreateMethod("return5", Prototype{TypeDescriptor::Int})};
   {
     LiveRegister r{return5.AllocRegister()};
     return5.BuildConst4(r, 5);
@@ -53,31 +53,30 @@ void GenerateSimpleTestCases(const string& outdir) {
   return5.Encode();
 
   // int return5() { return 5; }
-  auto integer_type{TypeDescriptor::FromClassname("java.lang.Integer")};
-  auto returnInteger5{cbuilder.CreateMethod("returnInteger5", Prototype{integer_type})};
+  auto returnInteger5{cbuilder.CreateMethod("returnInteger5", Prototype{TypeDescriptor::ObjectInt})};
   [&](MethodBuilder& method) {
     LiveRegister five{method.AllocRegister()};
     method.BuildConst4(five, 5);
     LiveRegister object{method.AllocRegister()};
     method.BuildNew(
-        object, integer_type, Prototype{TypeDescriptor::Void(), TypeDescriptor::Int()}, five);
+        object, TypeDescriptor::ObjectInt, Prototype{TypeDescriptor::Void, TypeDescriptor::Int}, five);
+    method.BuildUnBoxIfPrimitive(five, TypeDescriptor::ObjectInt, object);
     method.BuildReturn(object, /*is_object=*/true);
   }(returnInteger5);
   returnInteger5.Encode();
 
   // // int returnParam(int x) { return x; }
   auto returnParam{cbuilder.CreateMethod("returnParam",
-                                         Prototype{TypeDescriptor::Int(), TypeDescriptor::Int()})};
+                                         Prototype{TypeDescriptor::Int, TypeDescriptor::Int})};
   returnParam.BuildReturn(Value::Parameter(0));
   returnParam.Encode();
 
   // int returnStringLength(String x) { return x.length(); }
-  auto string_type{TypeDescriptor::FromClassname("java.lang.String")};
   MethodDeclData string_length{
-      dex_file.GetOrDeclareMethod(string_type, "length", Prototype{TypeDescriptor::Int()})};
+      dex_file.GetOrDeclareMethod(TypeDescriptor::String, "length", Prototype{TypeDescriptor::Int})};
 
   auto returnStringLength{
-      cbuilder.CreateMethod("returnStringLength", Prototype{TypeDescriptor::Int(), string_type})};
+      cbuilder.CreateMethod("returnStringLength", Prototype{TypeDescriptor::Int, TypeDescriptor::String})};
   {
     LiveRegister result = returnStringLength.AllocRegister();
     returnStringLength.AddInstruction(
@@ -88,7 +87,7 @@ void GenerateSimpleTestCases(const string& outdir) {
 
   // int returnIfZero(int x) { if (x == 0) { return 5; } else { return 3; } }
   MethodBuilder returnIfZero{cbuilder.CreateMethod(
-      "returnIfZero", Prototype{TypeDescriptor::Int(), TypeDescriptor::Int()})};
+      "returnIfZero", Prototype{TypeDescriptor::Int, TypeDescriptor::Int})};
   {
     LiveRegister resultIfZero{returnIfZero.AllocRegister()};
     Value else_target{returnIfZero.MakeLabel()};
@@ -109,7 +108,7 @@ void GenerateSimpleTestCases(const string& outdir) {
 
   // int returnIfNotZero(int x) { if (x != 0) { return 5; } else { return 3; } }
   MethodBuilder returnIfNotZero{cbuilder.CreateMethod(
-      "returnIfNotZero", Prototype{TypeDescriptor::Int(), TypeDescriptor::Int()})};
+      "returnIfNotZero", Prototype{TypeDescriptor::Int, TypeDescriptor::Int})};
   {
     LiveRegister resultIfNotZero{returnIfNotZero.AllocRegister()};
     Value else_target{returnIfNotZero.MakeLabel()};
@@ -145,7 +144,7 @@ void GenerateSimpleTestCases(const string& outdir) {
   // }
   // If it runs correctly, this test should return 2.
   MethodBuilder backwardsBranch{
-      cbuilder.CreateMethod("backwardsBranch", Prototype{TypeDescriptor::Int()})};
+      cbuilder.CreateMethod("backwardsBranch", Prototype{TypeDescriptor::Int})};
   [](MethodBuilder& method) {
     LiveRegister zero = method.AllocRegister();
     LiveRegister result = method.AllocRegister();
@@ -174,7 +173,7 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Test that we can make a null value. Basically:
   //
   // public static String returnNull() { return null; }
-  MethodBuilder returnNull{cbuilder.CreateMethod("returnNull", Prototype{string_type})};
+  MethodBuilder returnNull{cbuilder.CreateMethod("returnNull", Prototype{TypeDescriptor::String})};
   [](MethodBuilder& method) {
     LiveRegister zero = method.AllocRegister();
     method.BuildConst4(zero, 0);
@@ -185,7 +184,7 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Test that we can make String literals. Basically:
   //
   // public static String makeString() { return "Hello, World!"; }
-  MethodBuilder makeString{cbuilder.CreateMethod("makeString", Prototype{string_type})};
+  MethodBuilder makeString{cbuilder.CreateMethod("makeString", Prototype{TypeDescriptor::String})};
   [](MethodBuilder& method) {
     LiveRegister string = method.AllocRegister();
     method.BuildConstString(string, "Hello, World!");
@@ -197,7 +196,7 @@ void GenerateSimpleTestCases(const string& outdir) {
   //
   // int returnStringIfZeroAB(int x) { if (x == 0) { return "a"; } else { return "b"; } }
   MethodBuilder returnStringIfZeroAB{
-      cbuilder.CreateMethod("returnStringIfZeroAB", Prototype{string_type, TypeDescriptor::Int()})};
+      cbuilder.CreateMethod("returnStringIfZeroAB", Prototype{TypeDescriptor::String, TypeDescriptor::Int})};
   [&](MethodBuilder& method) {
     LiveRegister resultIfZero{method.AllocRegister()};
     Value else_target{method.MakeLabel()};
@@ -217,7 +216,7 @@ void GenerateSimpleTestCases(const string& outdir) {
   }(returnStringIfZeroAB);
   // int returnStringIfZeroAB(int x) { if (x == 0) { return "b"; } else { return "a"; } }
   MethodBuilder returnStringIfZeroBA{
-      cbuilder.CreateMethod("returnStringIfZeroBA", Prototype{string_type, TypeDescriptor::Int()})};
+      cbuilder.CreateMethod("returnStringIfZeroBA", Prototype{TypeDescriptor::String, TypeDescriptor::Int})};
   [&](MethodBuilder& method) {
     LiveRegister resultIfZero{method.AllocRegister()};
     Value else_target{method.MakeLabel()};
@@ -241,13 +240,13 @@ void GenerateSimpleTestCases(const string& outdir) {
   // radix); }
   MethodBuilder invokeStaticReturnObject{
       cbuilder.CreateMethod("invokeStaticReturnObject",
-                            Prototype{string_type, TypeDescriptor::Int(), TypeDescriptor::Int()})};
+                            Prototype{TypeDescriptor::String, TypeDescriptor::Int, TypeDescriptor::Int})};
   [&](MethodBuilder& method) {
     LiveRegister result{method.AllocRegister()};
     MethodDeclData to_string{dex_file.GetOrDeclareMethod(
         TypeDescriptor::FromClassname("java.lang.Integer"),
         "toString",
-        Prototype{string_type, TypeDescriptor::Int(), TypeDescriptor::Int()})};
+        Prototype{TypeDescriptor::String, TypeDescriptor::Int, TypeDescriptor::Int})};
     method.AddInstruction(Instruction::InvokeStaticObject(
         to_string.id, result, Value::Parameter(0), Value::Parameter(1)));
     method.BuildReturn(result, /*is_object=*/true);
@@ -257,11 +256,11 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Make sure we can invoke virtual methods that return an object
   // String invokeVirtualReturnObject(String s, int n) { return s.substring(n); }
   MethodBuilder invokeVirtualReturnObject{cbuilder.CreateMethod(
-      "invokeVirtualReturnObject", Prototype{string_type, string_type, TypeDescriptor::Int()})};
+      "invokeVirtualReturnObject", Prototype{TypeDescriptor::String, TypeDescriptor::String, TypeDescriptor::Int})};
   [&](MethodBuilder& method) {
     LiveRegister result{method.AllocRegister()};
     MethodDeclData substring{dex_file.GetOrDeclareMethod(
-        string_type, "substring", Prototype{string_type, TypeDescriptor::Int()})};
+        TypeDescriptor::String, "substring", Prototype{TypeDescriptor::String, TypeDescriptor::Int})};
     method.AddInstruction(Instruction::InvokeVirtualObject(
         substring.id, result, Value::Parameter(0), Value::Parameter(1)));
     method.BuildReturn(result, /*is_object=*/true);
@@ -272,9 +271,9 @@ void GenerateSimpleTestCases(const string& outdir) {
   // String castObjectToString(Object o) { return (String)o; }
   MethodBuilder castObjectToString{cbuilder.CreateMethod(
       "castObjectToString",
-      Prototype{string_type, TypeDescriptor::FromClassname("java.lang.Object")})};
+      Prototype{TypeDescriptor::String, TypeDescriptor::FromClassname("java.lang.Object")})};
   [&](MethodBuilder& method) {
-    const ir::Type* type_def = dex_file.GetOrAddType(string_type.descriptor());
+    const ir::Type* type_def = dex_file.GetOrAddType(TypeDescriptor::String.descriptor());
     method.AddInstruction(
         Instruction::Cast(Value::Parameter(0), Value::Type(type_def->orig_index)));
     method.BuildReturn(Value::Parameter(0), /*is_object=*/true);
@@ -286,10 +285,10 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Read a static field
   // int readStaticField() { return TestClass.staticInteger; }
   MethodBuilder readStaticField{
-      cbuilder.CreateMethod("readStaticField", Prototype{TypeDescriptor::Int()})};
+      cbuilder.CreateMethod("readStaticField", Prototype{TypeDescriptor::Int})};
   [&](MethodBuilder& method) {
     const ir::FieldDecl* field =
-        dex_file.GetOrAddField(test_class, "staticInteger", TypeDescriptor::Int());
+        dex_file.GetOrAddField(cbuilder.descriptor(), "staticInteger", TypeDescriptor::Int);
     LiveRegister result{method.AllocRegister()};
     method.AddInstruction(Instruction::GetStaticField(field->orig_index, result));
     method.BuildReturn(result, /*is_object=*/false);
@@ -299,10 +298,10 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Set a static field
   // void setStaticField() { TestClass.staticInteger = 7; }
   MethodBuilder setStaticField{
-      cbuilder.CreateMethod("setStaticField", Prototype{TypeDescriptor::Void()})};
+      cbuilder.CreateMethod("setStaticField", Prototype{TypeDescriptor::Void})};
   [&](MethodBuilder& method) {
     const ir::FieldDecl* field =
-        dex_file.GetOrAddField(test_class, "staticInteger", TypeDescriptor::Int());
+        dex_file.GetOrAddField(test_class, "staticInteger", TypeDescriptor::Int);
     LiveRegister number{method.AllocRegister()};
     method.BuildConst4(number, 7);
     method.AddInstruction(Instruction::SetStaticField(field->orig_index, number));
@@ -313,10 +312,10 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Read an instance field
   // int readInstanceField(TestClass obj) { return obj.instanceField; }
   MethodBuilder readInstanceField{
-      cbuilder.CreateMethod("readInstanceField", Prototype{TypeDescriptor::Int(), test_class})};
+      cbuilder.CreateMethod("readInstanceField", Prototype{TypeDescriptor::Int, test_class})};
   [&](MethodBuilder& method) {
     const ir::FieldDecl* field =
-        dex_file.GetOrAddField(test_class, "instanceField", TypeDescriptor::Int());
+        dex_file.GetOrAddField(test_class, "instanceField", TypeDescriptor::Int);
     LiveRegister result{method.AllocRegister()};
     method.AddInstruction(Instruction::GetField(field->orig_index, result, Value::Parameter(0)));
     method.BuildReturn(result, /*is_object=*/false);
@@ -326,10 +325,10 @@ void GenerateSimpleTestCases(const string& outdir) {
   // Set an instance field
   // void setInstanceField(TestClass obj) { obj.instanceField = 7; }
   MethodBuilder setInstanceField{
-      cbuilder.CreateMethod("setInstanceField", Prototype{TypeDescriptor::Void(), test_class})};
+      cbuilder.CreateMethod("setInstanceField", Prototype{TypeDescriptor::Void, test_class})};
   [&](MethodBuilder& method) {
     const ir::FieldDecl* field =
-        dex_file.GetOrAddField(test_class, "instanceField", TypeDescriptor::Int());
+        dex_file.GetOrAddField(test_class, "instanceField", TypeDescriptor::Int);
     LiveRegister number{method.AllocRegister()};
     method.BuildConst4(number, 7);
     method.AddInstruction(Instruction::SetField(field->orig_index, Value::Parameter(0), number));
@@ -338,25 +337,24 @@ void GenerateSimpleTestCases(const string& outdir) {
   }(setInstanceField);
 
   MethodBuilder newArray{
-      cbuilder.CreateMethod("newArray", Prototype{TypeDescriptor::Void(), test_class})};
+      cbuilder.CreateMethod("newArray", Prototype{TypeDescriptor::Void, test_class})};
   [&](MethodBuilder& method) {
     LiveRegister index{method.AllocRegister()};
     method.BuildConst4(index, 5);
     LiveRegister array{method.AllocRegister()};
-    method.BuildNewArray(array, integer_type, index);
-    MethodDeclData value_of{dex_file.GetOrDeclareMethod(
-        integer_type,
-        "valueOf",
-        Prototype{integer_type, TypeDescriptor::Int()})};
+    method.BuildNewArray(array, TypeDescriptor::Object, index);
     LiveRegister object{method.AllocRegister()};
     for (int i = 0; i < 5; ++i) {
       method.BuildConst4(index, i);
-      method.AddInstruction(Instruction::InvokeStaticObject(value_of.id, object, index));
+      method.BuildBoxIfPrimitive(object, TypeDescriptor::Int, index);
       method.BuildAput(Instruction::Op::kAputObject, array, object, index);
     }
     method.BuildReturn();
     method.Encode();
   }(newArray);
+
+
+//   MethodBuilder hook{cbuilder.CreateMethod("hook", Prototype{TypeDescriptor::Int, TypeDescriptor::Long})};
 
   slicer::MemView image{dex_file.CreateImage()};
   std::ofstream out_file(outdir + "/simple.dex");
