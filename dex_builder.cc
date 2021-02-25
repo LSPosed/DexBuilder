@@ -401,7 +401,8 @@ void ClassBuilder::set_source_file(const string &source) {
   class_->source_file = parent_->GetOrAddString(source);
 }
 
-FieldBuilder::FieldBuilder(ClassBuilder *parent, ir::Class* class_def, ir::FieldDecl *decl)
+FieldBuilder::FieldBuilder(ClassBuilder *parent, ir::Class *class_def,
+                           ir::FieldDecl *decl)
     : parent_(parent), class_(class_def), decl_(decl) {}
 
 ir::EncodedField *FieldBuilder::Encode() {
@@ -465,33 +466,33 @@ Value MethodBuilder::MakeLabel() {
   return Value::Label(labels_.size() - 1);
 }
 
-MethodBuilder& MethodBuilder::AddInstruction(Instruction instruction) {
+MethodBuilder &MethodBuilder::AddInstruction(Instruction instruction) {
   instructions_.push_back(instruction);
   return *this;
 }
-MethodBuilder& MethodBuilder::BuildBoxIfPrimitive(const Value &target,
-                                        const TypeDescriptor &type,
-                                        const Value &src) {
+MethodBuilder &MethodBuilder::BuildBoxIfPrimitive(const Value &target,
+                                                  const TypeDescriptor &type,
+                                                  const Value &src) {
   if (type.is_primitive()) {
     auto box_type{type.ToBoxType()};
     MethodDeclData value_of{dex_file()->GetOrDeclareMethod(
         box_type, "valueOf", Prototype{box_type, type})};
     AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src));
-  } else {
+  } else if (target != src) {
     AddInstruction(Instruction::OpWithArgs(Op::kMoveObject, target, src));
   }
   return *this;
 }
 
-MethodBuilder& MethodBuilder::BuildUnBoxIfPrimitive(const Value &target,
-                                          const TypeDescriptor &type,
-                                          const Value &src) {
+MethodBuilder &MethodBuilder::BuildUnBoxIfPrimitive(const Value &target,
+                                                    const TypeDescriptor &type,
+                                                    const Value &src) {
   if (type.is_object()) {
     auto unbox_type{type.ToUnBoxType()};
     MethodDeclData value{dex_file()->GetOrDeclareMethod(
         type, value_method_map.at(type), Prototype{unbox_type})};
     AddInstruction(Instruction::InvokeVirtual(value.id, target, src));
-  } else {
+  } else if (target != src) {
     AddInstruction(Instruction::OpWithArgs(Op::kMove, target, src));
   }
   return *this;

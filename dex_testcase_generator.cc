@@ -475,7 +475,7 @@ int main(int argc, char **argv) {
 
   string outdir = argv[1];
 
-  GenerateTrivialDexFile(outdir);
-  GenerateSimpleTestCases(outdir);
+//   GenerateTrivialDexFile(outdir);
+//   GenerateSimpleTestCases(outdir);
   GenerateHooker(outdir);
 }

@@ -130,10 +130,13 @@ private:
 class Prototype {
 public:
   template <typename... TypeDescriptors>
-  explicit Prototype(const TypeDescriptor &return_type, TypeDescriptors&&... param_types)
-      : return_type_{return_type}, param_types_{std::forward<TypeDescriptors>(param_types)...} {}
+  explicit Prototype(const TypeDescriptor &return_type,
+                     TypeDescriptors &&...param_types)
+      : return_type_{return_type}, param_types_{std::forward<TypeDescriptors>(
+                                       param_types)...} {}
 
-  explicit Prototype(const TypeDescriptor &return_type, const std::vector<TypeDescriptor>& param_types)
+  explicit Prototype(const TypeDescriptor &return_type,
+                     const std::vector<TypeDescriptor> &param_types)
       : return_type_{return_type}, param_types_{param_types} {}
 
   // Encode this prototype into the dex file.
@@ -185,6 +188,11 @@ public:
   size_t value() const { return value_; }
 
   constexpr Value() : value_{0}, kind_{Kind::kInvalid} {}
+
+  bool operator==(const Value &rhs) const {
+    return value_ == rhs.value_ && kind_ == rhs.kind_;
+  }
+  bool operator!=(const Value &rhs) const { return !(*this == rhs); }
 
 private:
   enum class Kind {
@@ -417,7 +425,8 @@ public:
 
   // Create a method with the given name and prototype. The returned
   // MethodBuilder can be used to fill in the method body.
-  MethodBuilder CreateMethod(const std::string &name, const Prototype &prototype);
+  MethodBuilder CreateMethod(const std::string &name,
+                             const Prototype &prototype);
 
   FieldBuilder CreateField(const std::string &name, const TypeDescriptor &type);
 
@@ -434,21 +443,25 @@ private:
 };
 
 class FieldBuilder {
-  public:
-    FieldBuilder(ClassBuilder* parent, ir::Class* class_def, ir::FieldDecl* decl);
-    ir::EncodedField *Encode();
+public:
+  FieldBuilder(ClassBuilder *parent, ir::Class *class_def, ir::FieldDecl *decl);
+  ir::EncodedField *Encode();
 
-    ClassBuilder* parent() const { return parent_; }
-    DexBuilder* dex_file() const { return parent_->parent(); }
+  ClassBuilder *parent() const { return parent_; }
+  DexBuilder *dex_file() const { return parent_->parent(); }
 
-    ::dex::u4 access_flags() const { return access_flags_; }
-    FieldBuilder& access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; return *this; }
+  ::dex::u4 access_flags() const { return access_flags_; }
+  FieldBuilder &access_flags(const ::dex::u4 &access_flags) {
+    access_flags_ = access_flags;
+    return *this;
+  }
 
-  private:
-    ClassBuilder* parent_;
-    ir::Class *class_;
-    ir::FieldDecl *decl_;
-    ::dex::u4 access_flags_ = ::dex::kAccPublic | ::dex::kAccStatic;;
+private:
+  ClassBuilder *parent_;
+  ir::Class *class_;
+  ir::FieldDecl *decl_;
+  ::dex::u4 access_flags_ = ::dex::kAccPublic | ::dex::kAccStatic;
+  ;
 };
 
 // Tools to help build methods and their bodies.
@@ -469,25 +482,29 @@ public:
   // Instruction builder methods //
   /////////////////////////////////
 
-  MethodBuilder& AddInstruction(Instruction instruction);
+  MethodBuilder &AddInstruction(Instruction instruction);
 
   // return-void
-  MethodBuilder& BuildReturn();
-  MethodBuilder& BuildReturn(const Value &src, bool is_object = false);
+  MethodBuilder &BuildReturn();
+  MethodBuilder &BuildReturn(const Value &src, bool is_object = false);
   // const/4
-  MethodBuilder& BuildConst4(const Value &target, int value);
-  MethodBuilder& BuildConstString(const Value &target, const std::string &value);
+  MethodBuilder &BuildConst4(const Value &target, int value);
+  MethodBuilder &BuildConstString(const Value &target,
+                                  const std::string &value);
   template <typename... T>
-  MethodBuilder& BuildNew(const Value &target, const TypeDescriptor &type,
-                const Prototype &constructor, const T &...args);
-  MethodBuilder& BuildNewArray(const Value &target, const TypeDescriptor &base_type,
-                     const Value &size);
-  MethodBuilder& BuildAput(Instruction::Op opcode, const Value &target_array,
-                 const Value &value, const Value &index);
-  MethodBuilder& BuildBoxIfPrimitive(const Value &target, const TypeDescriptor &type,
-                           const Value &src);
-  MethodBuilder& BuildUnBoxIfPrimitive(const Value &target, const TypeDescriptor &type,
-                             const Value &src);
+  MethodBuilder &BuildNew(const Value &target, const TypeDescriptor &type,
+                          const Prototype &constructor, const T &...args);
+  MethodBuilder &BuildNewArray(const Value &target,
+                               const TypeDescriptor &base_type,
+                               const Value &size);
+  MethodBuilder &BuildAput(Instruction::Op opcode, const Value &target_array,
+                           const Value &value, const Value &index);
+  MethodBuilder &BuildBoxIfPrimitive(const Value &target,
+                                     const TypeDescriptor &type,
+                                     const Value &src);
+  MethodBuilder &BuildUnBoxIfPrimitive(const Value &target,
+                                       const TypeDescriptor &type,
+                                       const Value &src);
 
   // TODO: add builders for more instructions
 
@@ -495,8 +512,10 @@ public:
   ClassBuilder *parent() const { return parent_; }
 
   ::dex::u4 access_flags() const { return access_flags_; }
-  MethodBuilder& access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; return *this; }
-
+  MethodBuilder &access_flags(const ::dex::u4 &access_flags) {
+    access_flags_ = access_flags;
+    return *this;
+  }
 
 private:
   using Op = Instruction::Op;
@@ -665,7 +684,8 @@ private:
 
   std::vector<bool> register_liveness_;
 
-  ::dex::u4 access_flags_ = ::dex::kAccPublic | ::dex::kAccStatic;;
+  ::dex::u4 access_flags_ = ::dex::kAccPublic | ::dex::kAccStatic;
+  ;
 };
 
 // Builds Dex files from scratch.
@@ -749,8 +769,9 @@ private:
 };
 
 template <typename... T>
-MethodBuilder& MethodBuilder::BuildNew(const Value &target, const TypeDescriptor &type,
-                             const Prototype &constructor, const T &...args) {
+MethodBuilder &
+MethodBuilder::BuildNew(const Value &target, const TypeDescriptor &type,
+                        const Prototype &constructor, const T &...args) {
   MethodDeclData constructor_data{
       dex_file()->GetOrDeclareMethod(type, "<init>", constructor)};
   // allocate the object
@@ -763,41 +784,45 @@ MethodBuilder& MethodBuilder::BuildNew(const Value &target, const TypeDescriptor
   return *this;
 };
 
-inline MethodBuilder& MethodBuilder::BuildNewArray(const Value &target,
-                                         const TypeDescriptor &type,
-                                         const Value &size) {
+inline MethodBuilder &MethodBuilder::BuildNewArray(const Value &target,
+                                                   const TypeDescriptor &type,
+                                                   const Value &size) {
   ir::Type *type_def = dex_file()->GetOrAddType(type.ToArray());
   AddInstruction(Instruction::OpWithArgs(Op::kNewArray, target, size,
                                          Value::Type(type_def->orig_index)));
   return *this;
 };
 
-inline MethodBuilder& MethodBuilder::BuildAput(Op opcode, const Value &target_array,
-                                     const Value &value, const Value &index) {
+inline MethodBuilder &MethodBuilder::BuildAput(Op opcode,
+                                               const Value &target_array,
+                                               const Value &value,
+                                               const Value &index) {
   AddInstruction(Instruction::OpWithArgs(opcode, value, target_array, index));
   return *this;
 }
 
-inline MethodBuilder& MethodBuilder::BuildReturn() {
+inline MethodBuilder &MethodBuilder::BuildReturn() {
   AddInstruction(Instruction::OpNoArgs(Op::kReturn));
   return *this;
 }
 
-inline MethodBuilder& MethodBuilder::BuildReturn(const Value &src, bool is_object) {
+inline MethodBuilder &MethodBuilder::BuildReturn(const Value &src,
+                                                 bool is_object) {
   AddInstruction(Instruction::OpWithArgs(
       is_object ? Op::kReturnObject : Op::kReturn, /*destination=*/{}, src));
   return *this;
 }
 
-inline MethodBuilder& MethodBuilder::BuildConst4(const Value &target, int value) {
+inline MethodBuilder &MethodBuilder::BuildConst4(const Value &target,
+                                                 int value) {
   assert(value < 16);
   AddInstruction(
       Instruction::OpWithArgs(Op::kMove, target, Value::Immediate(value)));
   return *this;
 }
 
-inline MethodBuilder& MethodBuilder::BuildConstString(const Value &target,
-                                            const std::string &value) {
+inline MethodBuilder &
+MethodBuilder::BuildConstString(const Value &target, const std::string &value) {
   const ir::String *const dex_string = dex_file()->GetOrAddString(value);
   AddInstruction(Instruction::OpWithArgs(
       Op::kMove, target, Value::String(dex_string->orig_index)));
