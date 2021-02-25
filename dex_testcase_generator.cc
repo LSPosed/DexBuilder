@@ -395,6 +395,12 @@ void GenerateSimpleTestCases(const string &outdir) {
 void GenerateHooker(const string &outdir) {
   DexBuilder dex_file;
 
+  auto return_type = TypeDescriptor::Int;
+  const auto parameter_types =
+      std::vector{TypeDescriptor::Int, TypeDescriptor::ObjectBoolean,
+                  TypeDescriptor::Double.ToArray(),
+                  TypeDescriptor::FromClassname("io.github.lsposed.Test")};
+
   ClassBuilder cbuilder{dex_file.MakeClass("LSPHooker")};
   cbuilder.set_source_file("dex_testcase_generator.cc#GenerateHooker");
 
@@ -413,13 +419,8 @@ void GenerateHooker(const string &outdir) {
       .BuildReturn()
       .Encode();
 
-  auto return_type = TypeDescriptor::Int;
-  const auto parameter_types =
-      std::vector{TypeDescriptor::Int, TypeDescriptor::ObjectBoolean,
-                  TypeDescriptor::FromClassname("io.github.lsposed.Test")};
-
   auto hookBuilder{cbuilder.CreateMethod(
-      "hook", Prototype{TypeDescriptor::Int, parameter_types})};
+      "hook", Prototype{return_type, parameter_types})};
   for (size_t i = 0u; i < parameter_types.size(); ++i) {
     hookBuilder.BuildBoxIfPrimitive(Value::Parameter(i), parameter_types[i],
                                     Value::Parameter(i));
@@ -450,6 +451,9 @@ void GenerateHooker(const string &outdir) {
     hookBuilder.BuildUnBoxIfPrimitive(tmp, box_type, tmp);
     hookBuilder.BuildReturn(tmp, false);
   } else {
+    const ir::Type *type_def = dex_file.GetOrAddType(return_type);
+    hookBuilder.AddInstruction(
+        Instruction::Cast(tmp, Value::Type(type_def->orig_index)));
     hookBuilder.BuildReturn(tmp, true);
   }
   auto *hook_method = hookBuilder.Encode();
