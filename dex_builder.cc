@@ -15,6 +15,7 @@
  */
 
 #include "dex_builder.h"
+#include "slicer/dex_bytecode.h"
 #include "slicer/dex_format.h"
 #include "slicer/dex_ir.h"
 
@@ -33,9 +34,9 @@ const TypeDescriptor TypeDescriptor::Void{"V"};
 const TypeDescriptor TypeDescriptor::Boolean{"Z"};
 const TypeDescriptor TypeDescriptor::Byte{"B"};
 const TypeDescriptor TypeDescriptor::Char{"C"};
-const TypeDescriptor TypeDescriptor::Double{"D"};
+const TypeDescriptor TypeDescriptor::Double{"D", true};
 const TypeDescriptor TypeDescriptor::Float{"F"};
-const TypeDescriptor TypeDescriptor::Long{"J"};
+const TypeDescriptor TypeDescriptor::Long{"J", true};
 const TypeDescriptor TypeDescriptor::Short{"S"};
 
 const TypeDescriptor TypeDescriptor::Object{"Ljava/lang/Object;"};
@@ -46,7 +47,7 @@ const TypeDescriptor TypeDescriptor::ObjectByte{"Ljava/lang/Byte;"};
 const TypeDescriptor TypeDescriptor::ObjectChar{"Ljava/lang/Character;"};
 const TypeDescriptor TypeDescriptor::ObjectDouble{"Ljava/lang/Double;"};
 const TypeDescriptor TypeDescriptor::ObjectFloat{"Ljava/lang/Float;"};
-const TypeDescriptor TypeDescriptor::ObjectLong{"Ljava/lang/Integer;"};
+const TypeDescriptor TypeDescriptor::ObjectLong{"Ljava/lang/Long;"};
 const TypeDescriptor TypeDescriptor::ObjectShort{"Ljava/lang/Short;"};
 
 const std::unordered_map<TypeDescriptor, TypeDescriptor>
@@ -111,11 +112,17 @@ std::ostream &operator<<(std::ostream &out, const Instruction::Op &opcode) {
   case Instruction::Op::kReturnObject:
     out << "kReturnObject";
     return out;
+  case Instruction::Op::kReturnWide:
+    out << "kReturnWide";
+    return out;
   case Instruction::Op::kMove:
     out << "kMove";
     return out;
   case Instruction::Op::kMoveObject:
     out << "kMoveObject";
+    return out;
+  case Instruction::Op::kMoveWide:
+    out << "kMoveWide";
     return out;
   case Instruction::Op::kInvokeVirtual:
     out << "kInvokeVirtual";
@@ -425,9 +432,16 @@ ir::EncodedMethod *MethodBuilder::Encode() {
 
   auto *code = dex_file()->Alloc<ir::Code>();
   assert(decl_->prototype != nullptr);
-  size_t const num_args = decl_->prototype->param_types != nullptr
-                              ? decl_->prototype->param_types->types.size()
-                              : 0;
+
+  size_t num_args = 0;
+  if (decl_->prototype->param_types != nullptr) {
+    for (auto &type : decl_->prototype->param_types->types) {
+      if (type->GetCategory() == ir::Type::Category::WideScalar) {
+        num_args += 1;
+      }
+      num_args += 1;
+    }
+  }
   code->registers = NumRegisters() + num_args + kMaxScratchRegisters;
   code->ins_count = num_args;
   EncodeInstructions();
@@ -477,7 +491,11 @@ MethodBuilder &MethodBuilder::BuildBoxIfPrimitive(const Value &target,
     auto box_type{type.ToBoxType()};
     MethodDeclData value_of{dex_file()->GetOrDeclareMethod(
         box_type, "valueOf", Prototype{box_type, type})};
-    AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src));
+    if (type.is_wide())
+      AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src,
+                                                     src.WidePair()));
+    else
+      AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src));
   } else if (target != src) {
     AddInstruction(Instruction::OpWithArgs(Op::kMoveObject, target, src));
   }
@@ -491,7 +509,10 @@ MethodBuilder &MethodBuilder::BuildUnBoxIfPrimitive(const Value &target,
     auto unbox_type{type.ToUnBoxType()};
     MethodDeclData value{dex_file()->GetOrDeclareMethod(
         type, value_method_map.at(type), Prototype{unbox_type})};
-    AddInstruction(Instruction::InvokeVirtual(value.id, target, src));
+    if (unbox_type.is_wide())
+      AddInstruction(Instruction::InvokeVirtualWide(value.id, target, src));
+    else
+      AddInstruction(Instruction::InvokeVirtual(value.id, target, src));
   } else if (target != src) {
     AddInstruction(Instruction::OpWithArgs(Op::kMove, target, src));
   }
@@ -504,8 +525,11 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
     return EncodeReturn(instruction, ::dex::Opcode::OP_RETURN);
   case Instruction::Op::kReturnObject:
     return EncodeReturn(instruction, ::dex::Opcode::OP_RETURN_OBJECT);
+  case Instruction::Op::kReturnWide:
+    return EncodeReturn(instruction, ::dex::Opcode::OP_RETURN_WIDE);
   case Instruction::Op::kMove:
   case Instruction::Op::kMoveObject:
+  case Instruction::Op::kMoveWide:
     return EncodeMove(instruction);
   case Instruction::Op::kInvokeVirtual:
     return EncodeInvoke(instruction, ::dex::Opcode::OP_INVOKE_VIRTUAL);
@@ -551,18 +575,34 @@ void MethodBuilder::EncodeReturn(const Instruction &instruction,
 
 void MethodBuilder::EncodeMove(const Instruction &instruction) {
   assert(Instruction::Op::kMove == instruction.opcode() ||
-         Instruction::Op::kMoveObject == instruction.opcode());
+         Instruction::Op::kMoveObject == instruction.opcode() ||
+         Instruction::Op::kMoveWide == instruction.opcode());
   assert(instruction.dest().has_value());
   assert(instruction.dest()->is_variable());
   assert(1 == instruction.args().size());
 
   const Value &source = instruction.args()[0];
 
-  if (source.is_immediate()) {
-    // TODO: support more registers
-    assert(RegisterValue(*instruction.dest()) < 16);
-    Encode11n(::dex::Opcode::OP_CONST_4, RegisterValue(*instruction.dest()),
+  if (source.is_immediate() && Instruction::Op::kMove == instruction.opcode()) {
+    if (RegisterValue(*instruction.dest()) < 16 && source.value() < 16){
+        Encode11n(::dex::Opcode::OP_CONST_4, RegisterValue(*instruction.dest()),
               source.value());
+    } else if(source.value() <= 65535) {
+        Encode21s(::dex::Opcode::OP_CONST_16, RegisterValue(*instruction.dest()),
+                  source.value());
+    } else {
+        Encode31i(::dex::Opcode::OP_CONST, RegisterValue(*instruction.dest()), source.value());
+    }
+  } else if (source.is_immediate() && Instruction::Op::kMoveWide == instruction.opcode()) {
+    if(source.value() <= 65535) {
+        Encode21s(::dex::Opcode::OP_CONST_WIDE_16, RegisterValue(*instruction.dest()),
+                  source.value());
+    } else if(source.value() <= 4294967295) {
+        Encode31i(::dex::Opcode::OP_CONST_WIDE_32, RegisterValue(*instruction.dest()), source.value());
+    } else {
+        assert(false && "not supported yet");
+        // Encode51i(::dex::Opcode::OP_CONST_WIDE, RegisterValue(*instruction.dest()), source.value());
+    }
   } else if (source.is_string()) {
     constexpr size_t kMaxRegisters = 256;
     assert(RegisterValue(*instruction.dest()) < kMaxRegisters);
@@ -576,7 +616,9 @@ void MethodBuilder::EncodeMove(const Instruction &instruction) {
     // the instruction.
     auto opcode = instruction.opcode() == Instruction::Op::kMove
                       ? ::dex::Opcode::OP_MOVE_16
-                      : ::dex::Opcode::OP_MOVE_OBJECT_16;
+                      : (instruction.opcode() == Instruction::Op::kMoveWide
+                             ? ::dex::Opcode::OP_MOVE_WIDE_16
+                             : ::dex::Opcode::OP_MOVE_OBJECT_16);
     Encode32x(opcode, RegisterValue(*instruction.dest()),
               RegisterValue(source));
   } else {
@@ -591,7 +633,7 @@ void MethodBuilder::EncodeInvoke(const Instruction &instruction,
   // Currently, we only support up to 5 arguments.
   assert(instruction.args().size() < kMaxArgs);
 
-  uint8_t arguments[kMaxArgs]{};
+  uint8_t arguments[kMaxArgs]{0};
   bool has_long_args = false;
   for (size_t i = 0; i < instruction.args().size(); ++i) {
     assert(instruction.args()[i].is_variable());
@@ -602,6 +644,7 @@ void MethodBuilder::EncodeInvoke(const Instruction &instruction,
   }
 
   if (has_long_args) {
+    assert(false && "not supported yet");
     // Some of the registers don't fit in the four bit short form of the invoke
     // instruction, so we need to do an invoke/range. To do this, we need to
     // first move all the arguments into contiguous temporary registers.
@@ -622,14 +665,19 @@ void MethodBuilder::EncodeInvoke(const Instruction &instruction,
         } else {
           move_op = prototype->ArgType(i - 1).is_object()
                         ? Instruction::Op::kMoveObject
-                        : Instruction::Op::kMove;
+                        : (prototype->ArgType(i - 1).is_wide()
+                               ? Instruction::Op::kMoveWide
+                               : Instruction::Op::kMove);
         }
       } else {
-        move_op = prototype->ArgType(i).is_object()
+        move_op = prototype->ArgType(i - 1).is_object()
                       ? Instruction::Op::kMoveObject
-                      : Instruction::Op::kMove;
+                      : (prototype->ArgType(i - 1).is_wide()
+                             ? Instruction::Op::kMoveWide
+                             : Instruction::Op::kMove);
       }
 
+      // FIXME: scratch[i] is not write for wide type
       EncodeMove(
           Instruction::OpWithArgs(move_op, scratch[i], instruction.args()[i]));
     }
@@ -642,14 +690,17 @@ void MethodBuilder::EncodeInvoke(const Instruction &instruction,
               arguments[4]);
   }
 
+  const auto &prototype =
+      dex_file()->GetPrototypeByMethodId(instruction.index_argument());
   // If there is a return value, add a move-result instruction
   if (instruction.dest().has_value()) {
     Encode11x(instruction.result_is_object()
                   ? ::dex::Opcode::OP_MOVE_RESULT_OBJECT
-                  : ::dex::Opcode::OP_MOVE_RESULT,
+                  : (instruction.result_is_wide()
+                         ? ::dex::Opcode::OP_MOVE_RESULT_WIDE
+                         : ::dex::Opcode::OP_MOVE_RESULT),
               RegisterValue(*instruction.dest()));
   }
-
   max_args_ = std::max(max_args_, instruction.args().size());
 }
 

@@ -19,6 +19,7 @@
 
 #include <fstream>
 #include <string>
+#include <iostream>
 
 // Adding tests here requires changes in several other places. See README.md in
 // the view_compiler directory for more information.
@@ -59,7 +60,7 @@ void GenerateSimpleTestCases(const string &outdir) {
       cbuilder.CreateMethod("return5", Prototype{TypeDescriptor::Int})};
   {
     LiveRegister r{return5.AllocRegister()};
-    return5.BuildConst4(r, 5);
+    return5.BuildConst(r, 5);
     return5.BuildReturn(r);
   }
   return5.Encode();
@@ -69,7 +70,7 @@ void GenerateSimpleTestCases(const string &outdir) {
       "returnInteger5", Prototype{TypeDescriptor::ObjectInt})};
   [&](MethodBuilder &method) {
     LiveRegister five{method.AllocRegister()};
-    method.BuildConst4(five, 5);
+    method.BuildConst(five, 5);
     LiveRegister object{method.AllocRegister()};
     method.BuildNew(object, TypeDescriptor::ObjectInt,
                     Prototype{TypeDescriptor::Void, TypeDescriptor::Int}, five);
@@ -109,13 +110,13 @@ void GenerateSimpleTestCases(const string &outdir) {
         Instruction::OpWithArgs(Instruction::Op::kBranchEqz, /*dest=*/{},
                                 Value::Parameter(0), else_target));
     // else branch
-    returnIfZero.BuildConst4(resultIfZero, 3);
+    returnIfZero.BuildConst(resultIfZero, 3);
     returnIfZero.AddInstruction(Instruction::OpWithArgs(
         Instruction::Op::kReturn, /*dest=*/{}, resultIfZero));
     // then branch
     returnIfZero.AddInstruction(Instruction::OpWithArgs(
         Instruction::Op::kBindLabel, /*dest=*/{}, else_target));
-    returnIfZero.BuildConst4(resultIfZero, 5);
+    returnIfZero.BuildConst(resultIfZero, 5);
     returnIfZero.AddInstruction(Instruction::OpWithArgs(
         Instruction::Op::kReturn, /*dest=*/{}, resultIfZero));
   }
@@ -131,13 +132,13 @@ void GenerateSimpleTestCases(const string &outdir) {
         Instruction::OpWithArgs(Instruction::Op::kBranchNEqz, /*dest=*/{},
                                 Value::Parameter(0), else_target));
     // else branch
-    returnIfNotZero.BuildConst4(resultIfNotZero, 3);
+    returnIfNotZero.BuildConst(resultIfNotZero, 3);
     returnIfNotZero.AddInstruction(Instruction::OpWithArgs(
         Instruction::Op::kReturn, /*dest=*/{}, resultIfNotZero));
     // then branch
     returnIfNotZero.AddInstruction(Instruction::OpWithArgs(
         Instruction::Op::kBindLabel, /*dest=*/{}, else_target));
-    returnIfNotZero.BuildConst4(resultIfNotZero, 5);
+    returnIfNotZero.BuildConst(resultIfNotZero, 5);
     returnIfNotZero.AddInstruction(Instruction::OpWithArgs(
         Instruction::Op::kReturn, /*dest=*/{}, resultIfNotZero));
   }
@@ -166,8 +167,8 @@ void GenerateSimpleTestCases(const string &outdir) {
     LiveRegister result = method.AllocRegister();
     Value labelA = method.MakeLabel();
     Value labelB = method.MakeLabel();
-    method.BuildConst4(zero, 0);
-    method.BuildConst4(result, 1);
+    method.BuildConst(zero, 0);
+    method.BuildConst(result, 1);
     method.AddInstruction(Instruction::OpWithArgs(Instruction::Op::kBranchEqz,
                                                   /*dest=*/{}, zero, labelB));
 
@@ -177,11 +178,11 @@ void GenerateSimpleTestCases(const string &outdir) {
 
     method.AddInstruction(Instruction::OpWithArgs(Instruction::Op::kBindLabel,
                                                   /*dest=*/{}, labelB));
-    method.BuildConst4(result, 2);
+    method.BuildConst(result, 2);
     method.AddInstruction(Instruction::OpWithArgs(Instruction::Op::kBranchEqz,
                                                   /*dest=*/{}, zero, labelA));
 
-    method.BuildConst4(result, 3);
+    method.BuildConst(result, 3);
     method.BuildReturn(result);
   }(backwardsBranch);
   backwardsBranch.Encode();
@@ -193,7 +194,7 @@ void GenerateSimpleTestCases(const string &outdir) {
       cbuilder.CreateMethod("returnNull", Prototype{TypeDescriptor::String})};
   [](MethodBuilder &method) {
     LiveRegister zero = method.AllocRegister();
-    method.BuildConst4(zero, 0);
+    method.BuildConst(zero, 0);
     method.BuildReturn(zero, /*is_object=*/true);
   }(returnNull);
   returnNull.Encode();
@@ -332,7 +333,7 @@ void GenerateSimpleTestCases(const string &outdir) {
     const ir::FieldDecl *field = dex_file.GetOrAddField(
         cbuilder.descriptor(), "staticInteger", TypeDescriptor::Int);
     LiveRegister number{method.AllocRegister()};
-    method.BuildConst4(number, 7);
+    method.BuildConst(number, 7);
     method.AddInstruction(
         Instruction::SetStaticField(field->orig_index, number));
     method.BuildReturn();
@@ -363,7 +364,7 @@ void GenerateSimpleTestCases(const string &outdir) {
     const ir::FieldDecl *field = dex_file.GetOrAddField(
         cbuilder.descriptor(), "instanceField", TypeDescriptor::Int);
     LiveRegister number{method.AllocRegister()};
-    method.BuildConst4(number, 7);
+    method.BuildConst(number, 7);
     method.AddInstruction(
         Instruction::SetField(field->orig_index, Value::Parameter(0), number));
     method.BuildReturn();
@@ -374,12 +375,12 @@ void GenerateSimpleTestCases(const string &outdir) {
       cbuilder.CreateMethod("newArray", Prototype{TypeDescriptor::Void})};
   [&](MethodBuilder &method) {
     LiveRegister index{method.AllocRegister()};
-    method.BuildConst4(index, 5);
+    method.BuildConst(index, 5);
     LiveRegister array{method.AllocRegister()};
     method.BuildNewArray(array, TypeDescriptor::Object, index);
     LiveRegister object{method.AllocRegister()};
     for (int i = 0; i < 5; ++i) {
-      method.BuildConst4(index, i);
+      method.BuildConst(index, i);
       method.BuildBoxIfPrimitive(object, TypeDescriptor::Int, index);
       method.BuildAput(Instruction::Op::kAputObject, array, object, index);
     }
@@ -395,10 +396,10 @@ void GenerateSimpleTestCases(const string &outdir) {
 void GenerateHooker(const string &outdir) {
   DexBuilder dex_file;
 
-  auto return_type = TypeDescriptor::Int;
+  auto return_type = TypeDescriptor::Double;
   const auto parameter_types =
-      std::vector{TypeDescriptor::Int, TypeDescriptor::ObjectBoolean,
-                  TypeDescriptor::Double.ToArray(),
+      std::vector{TypeDescriptor::Int,
+                 TypeDescriptor::Long,
                   TypeDescriptor::FromClassname("io.github.lsposed.Test")};
 
   ClassBuilder cbuilder{dex_file.MakeClass("LSPHooker")};
@@ -421,18 +422,18 @@ void GenerateHooker(const string &outdir) {
 
   auto hookBuilder{cbuilder.CreateMethod(
       "hook", Prototype{return_type, parameter_types})};
-  for (size_t i = 0u; i < parameter_types.size(); ++i) {
-    hookBuilder.BuildBoxIfPrimitive(Value::Parameter(i), parameter_types[i],
-                                    Value::Parameter(i));
-  }
-  auto hook_params_array{hookBuilder.AllocRegister()};
+  // allocate tmp frist because of wide
   auto tmp{hookBuilder.AllocRegister()};
-  hookBuilder.BuildConst4(tmp, parameter_types.size());
+  hookBuilder.BuildConst(tmp, parameter_types.size());
+  auto hook_params_array{hookBuilder.AllocRegister()};
   hookBuilder.BuildNewArray(hook_params_array, TypeDescriptor::Object, tmp);
-  for (size_t i = 0; i < parameter_types.size(); ++i) {
-    hookBuilder.BuildConst4(tmp, i);
+  for (size_t i = 0u, j = 0u; i < parameter_types.size(); ++i, ++j) {
+    hookBuilder.BuildBoxIfPrimitive(Value::Parameter(j), parameter_types[i],
+                                    Value::Parameter(j));
+    hookBuilder.BuildConst(tmp, i);
     hookBuilder.BuildAput(Instruction::Op::kAputObject, hook_params_array,
-                          Value::Parameter(i), tmp);
+                          Value::Parameter(j), tmp);
+    if (parameter_types[i].is_wide()) ++j;
   }
   auto handle_hook_method{dex_file.GetOrDeclareMethod(
       hooker_type, "handleHookedMethod",
@@ -449,7 +450,7 @@ void GenerateHooker(const string &outdir) {
     hookBuilder.AddInstruction(
         Instruction::Cast(tmp, Value::Type(type_def->orig_index)));
     hookBuilder.BuildUnBoxIfPrimitive(tmp, box_type, tmp);
-    hookBuilder.BuildReturn(tmp, false);
+    hookBuilder.BuildReturn(tmp, false, return_type.is_wide());
   } else {
     const ir::Type *type_def = dex_file.GetOrAddType(return_type);
     hookBuilder.AddInstruction(
@@ -462,10 +463,16 @@ void GenerateHooker(const string &outdir) {
       cbuilder.CreateMethod("backup", Prototype{return_type, parameter_types})};
   if (return_type == TypeDescriptor::Void) {
     backup_builder.BuildReturn();
+  } else if(return_type.is_wide()){
+    LiveRegister zero = backup_builder.AllocRegister();
+    LiveRegister zero_wide = backup_builder.AllocRegister();
+    backup_builder.BuildConstWide(zero, 0);
+    backup_builder.BuildReturn(zero, /*is_object=*/true, true);
   } else {
     LiveRegister zero = backup_builder.AllocRegister();
-    backup_builder.BuildConst4(zero, 0);
-    backup_builder.BuildReturn(zero, /*is_object=*/true);
+    LiveRegister zero_wide = backup_builder.AllocRegister();
+    backup_builder.BuildConst(zero, 0);
+    backup_builder.BuildReturn(zero, /*is_object=*/true, false);
   }
   auto *back_method = backup_builder.Encode();
 

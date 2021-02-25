@@ -107,6 +107,8 @@ public:
 
   bool is_primitive() const { return !is_object() && !is_array(); }
 
+  bool is_wide() const { return wide_; }
+
   bool operator<(const TypeDescriptor &rhs) const {
     return descriptor_ < rhs.descriptor_;
   }
@@ -120,9 +122,11 @@ public:
 private:
   static const std::unordered_map<TypeDescriptor, TypeDescriptor> unbox_map;
 
-  explicit TypeDescriptor(std::string descriptor) : descriptor_{descriptor} {}
+  explicit TypeDescriptor(std::string descriptor, bool wide = false)
+      : descriptor_{descriptor}, wide_(wide) {}
 
   const std::string descriptor_;
+  const bool wide_;
 };
 
 // Defines a function signature. For example, Prototype{TypeDescriptor::VOID,
@@ -146,6 +150,8 @@ public:
   std::string Shorty() const;
 
   const TypeDescriptor &ArgType(size_t index) const;
+
+  const TypeDescriptor &ReturnType() const { return return_type_; }
 
   bool operator<(const Prototype &rhs) const {
     return std::make_tuple(return_type_, param_types_) <
@@ -193,6 +199,11 @@ public:
     return value_ == rhs.value_ && kind_ == rhs.kind_;
   }
   bool operator!=(const Value &rhs) const { return !(*this == rhs); }
+
+  Value WidePair() const {
+    assert(kind_ == Kind::kLocalRegister || kind_ == Kind::kParameter);
+    return Value{value_ + 1, kind_};
+  }
 
 private:
   enum class Kind {
@@ -258,10 +269,12 @@ public:
     kInvokeVirtual,
     kMove,
     kMoveObject,
+    kMoveWide,
     kNew,
     kNewArray,
     kReturn,
     kReturnObject,
+    kReturnWide,
     kSetInstanceField,
     kSetStaticField,
     kAputObject,
@@ -280,8 +293,17 @@ public:
   template <typename... T>
   static inline Instruction
   OpWithArgs(Op opcode, std::optional<const Value> dest, const T &...args) {
-    return Instruction{opcode, /*index_argument=*/0, /*result_is_object=*/false,
-                       dest, args...};
+    return Instruction{
+        opcode, /*index_argument=*/0, /*result_is_object=*/false, false, dest,
+        args...};
+  }
+
+  template <typename... T>
+  static inline Instruction
+  OpWithArgsWide(Op opcode, std::optional<const Value> dest, const T &...args) {
+    return Instruction{
+        opcode, /*index_argument=*/0, /*result_is_object=*/false, true, dest,
+        args...};
   }
 
   // A cast instruction. Basically, `(type)val`
@@ -295,52 +317,90 @@ public:
   static inline Instruction InvokeVirtual(size_t index_argument,
                                           std::optional<const Value> dest,
                                           Value this_arg, T... args) {
-    return Instruction{
-        Op::kInvokeVirtual, index_argument, /*result_is_object=*/false, dest,
-        this_arg,           args...};
+    return Instruction{Op::kInvokeVirtual,
+                       index_argument,
+                       /*result_is_object=*/false,
+                       false,
+                       dest,
+                       this_arg,
+                       args...};
+  }
+  template <typename... T>
+  static inline Instruction InvokeVirtualWide(size_t index_argument,
+                                              std::optional<const Value> dest,
+                                              Value this_arg, T... args) {
+    return Instruction{Op::kInvokeVirtual,
+                       index_argument,
+                       /*result_is_object=*/false,
+                       true,
+                       dest,
+                       this_arg,
+                       args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction
   InvokeVirtualObject(size_t index_argument, std::optional<const Value> dest,
                       Value this_arg, const T &...args) {
-    return Instruction{
-        Op::kInvokeVirtual, index_argument, /*result_is_object=*/true, dest,
-        this_arg,           args...};
+    return Instruction{Op::kInvokeVirtual,
+                       index_argument,
+                       /*result_is_object=*/true,
+                       false,
+                       dest,
+                       this_arg,
+                       args...};
   }
   // For direct calls (basically, constructors).
   template <typename... T>
   static inline Instruction InvokeDirect(size_t index_argument,
                                          std::optional<const Value> dest,
                                          Value this_arg, const T &...args) {
-    return Instruction{
-        Op::kInvokeDirect, index_argument, /*result_is_object=*/false, dest,
-        this_arg,          args...};
+    return Instruction{Op::kInvokeDirect,
+                       index_argument,
+                       /*result_is_object=*/false,
+                       false,
+                       dest,
+                       this_arg,
+                       args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction
   InvokeDirectObject(size_t index_argument, std::optional<const Value> dest,
                      Value this_arg, const T &...args) {
-    return Instruction{
-        Op::kInvokeDirect, index_argument, /*result_is_object=*/true, dest,
-        this_arg,          args...};
+    return Instruction{Op::kInvokeDirect,
+                       index_argument,
+                       /*result_is_object=*/true,
+                       false,
+                       dest,
+                       this_arg,
+                       args...};
   }
   // For static calls.
   template <typename... T>
   static inline Instruction InvokeStatic(size_t index_argument,
                                          std::optional<const Value> dest,
                                          const T &...args) {
-    return Instruction{Op::kInvokeStatic, index_argument,
-                       /*result_is_object=*/false, dest, args...};
+    return Instruction{
+        Op::kInvokeStatic,          index_argument,
+        /*result_is_object=*/false, false,          dest, args...};
+  }
+  template <typename... T>
+  static inline Instruction InvokeStaticWide(size_t index_argument,
+                                             std::optional<const Value> dest,
+                                             const T &...args) {
+    return Instruction{
+        Op::kInvokeStatic,          index_argument,
+        /*result_is_object=*/false, true,           dest, args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction InvokeStaticObject(size_t index_argument,
                                                std::optional<const Value> dest,
                                                const T &...args) {
-    return Instruction{Op::kInvokeStatic, index_argument,
-                       /*result_is_object=*/true, dest, args...};
+    return Instruction{
+        Op::kInvokeStatic,         index_argument,
+        /*result_is_object=*/true, false,          dest, args...};
   }
   // For static calls.
   template <typename... T>
@@ -355,22 +415,55 @@ public:
     return Instruction{Op::kGetStaticField, field_id, dest};
   }
 
+  static inline Instruction GetStaticField(size_t field_id, const Value &dest,
+                                           bool result_is_wide) {
+    return Instruction{Op::kGetStaticField, field_id, false, result_is_wide,
+                       dest};
+  }
+
   static inline Instruction SetStaticField(size_t field_id,
                                            const Value &value) {
-    return Instruction{Op::kSetStaticField, field_id,
-                       /*result_is_object=*/false, /*dest=*/{}, value};
+    return Instruction{
+        Op::kSetStaticField,        field_id,
+        /*result_is_object=*/false, false,    /*dest=*/{}, value};
+  }
+
+  static inline Instruction SetStaticField(size_t field_id, const Value &value,
+                                           bool result_is_wide) {
+    return Instruction{
+        Op::kSetStaticField,        field_id,
+        /*result_is_object=*/false, result_is_wide, /*dest=*/{}, value};
   }
 
   static inline Instruction GetField(size_t field_id, const Value &dest,
                                      const Value &object) {
-    return Instruction{Op::kGetInstanceField, field_id,
-                       /*result_is_object=*/false, dest, object};
+    return Instruction{Op::kGetInstanceField,      field_id,
+                       /*result_is_object=*/false, false,    dest, object};
+  }
+
+  static inline Instruction GetField(size_t field_id, const Value &dest,
+                                     const Value &object, bool result_is_wide) {
+    return Instruction{
+        Op::kGetInstanceField,      field_id,
+        /*result_is_object=*/false, result_is_wide, dest, object};
   }
 
   static inline Instruction SetField(size_t field_id, const Value &object,
                                      const Value &value) {
+    return Instruction{Op::kSetInstanceField,
+                       field_id,
+                       /*result_is_object=*/false,
+                       false,
+                       /*dest=*/{},
+                       object,
+                       value};
+  }
+
+  static inline Instruction SetField(size_t field_id, const Value &object,
+                                     const Value &value, bool result_is_wide) {
     return Instruction{
         Op::kSetInstanceField, field_id, /*result_is_object=*/false,
+        result_is_wide,
         /*dest=*/{},           object,   value};
   }
 
@@ -381,6 +474,7 @@ public:
   Op opcode() const { return opcode_; }
   size_t index_argument() const { return index_argument_; }
   bool result_is_object() const { return result_is_object_; }
+  bool result_is_wide() const { return result_is_wide_; }
   const std::optional<const Value> &dest() const { return dest_; }
   const std::vector<Value> &args() const { return args_; }
 
@@ -388,18 +482,22 @@ private:
   inline Instruction(Op opcode, size_t index_argument,
                      std::optional<const Value> dest)
       : opcode_{opcode}, index_argument_{index_argument},
-        result_is_object_{false}, dest_{dest}, args_{} {}
+        result_is_object_{false}, result_is_wide_(false), dest_{dest}, args_{} {
+  }
 
   template <typename... T>
   inline Instruction(Op opcode, size_t index_argument, bool result_is_object,
-                     std::optional<const Value> dest, const T &...args)
+                     bool result_is_wide, std::optional<const Value> dest,
+                     const T &...args)
       : opcode_{opcode}, index_argument_{index_argument},
-        result_is_object_{result_is_object}, dest_{dest}, args_{args...} {}
+        result_is_object_{result_is_object},
+        result_is_wide_(result_is_wide), dest_{dest}, args_{args...} {}
 
   const Op opcode_;
   // The index of the method to invoke, for kInvokeVirtual and similar opcodes.
   const size_t index_argument_{0};
   const bool result_is_object_;
+  const bool result_is_wide_;
   const std::optional<const Value> dest_;
   const std::vector<Value> args_;
 };
@@ -486,9 +584,11 @@ public:
 
   // return-void
   MethodBuilder &BuildReturn();
-  MethodBuilder &BuildReturn(const Value &src, bool is_object = false);
+  MethodBuilder &BuildReturn(const Value &src, bool is_object = false,
+                             bool is_wide = false);
   // const/4
-  MethodBuilder &BuildConst4(const Value &target, int value);
+  MethodBuilder &BuildConst(const Value &target, int value);
+  MethodBuilder &BuildConstWide(const Value &target, int value);
   MethodBuilder &BuildConstString(const Value &target,
                                   const std::string &value);
   template <typename... T>
@@ -583,15 +683,29 @@ private:
     buffer_.push_back(c);
   }
 
+  inline void Encode21s(::dex::Opcode opcode, uint8_t a, uint16_t b) {
+    Encode21c(opcode, a, b);
+  }
+
   inline void Encode23x(::dex::Opcode opcode, uint8_t a, uint8_t b, uint8_t c) {
+    // AA|op|CC|BB
     buffer_.push_back((a << 8) | ToBits(opcode));
     buffer_.push_back((c << 8) | b);
   }
 
   inline void Encode32x(::dex::Opcode opcode, uint16_t a, uint16_t b) {
+    // ØØ|op|AAAA|BBBB
     buffer_.push_back(ToBits(opcode));
     buffer_.push_back(a);
     buffer_.push_back(b);
+  }
+
+  inline void Encode31i(::dex::Opcode opcode, uint8_t a, uint32_t b) {
+    // AA|op|BBBBlo|BBBBhi
+    buffer_.push_back((a << 8) | ToBits(opcode));
+    // FIXME: it may be wrong
+    buffer_.push_back((uint16_t)b);
+    buffer_.push_back(b >> 16);
   }
 
   inline void Encode35c(::dex::Opcode opcode, size_t a, uint16_t b, uint8_t c,
@@ -625,7 +739,7 @@ private:
   // contiguous, so they are suitable for the invoke-*/range instructions.
   template <int num_regs>
   std::array<Value, num_regs> GetScratchRegisters() const {
-    static_assert(num_regs <= kMaxScratchRegisters);
+    // static_assert(num_regs <= kMaxScratchRegisters);
     std::array<Value, num_regs> regs;
     for (size_t i = 0; i < num_regs; ++i) {
       regs[i] = std::move(Value::Local(NumRegisters() + i));
@@ -659,7 +773,8 @@ private:
 
   // We create some scratch registers for when we have to shuffle registers
   // around to make legal DEX code.
-  static constexpr size_t kMaxScratchRegisters = 5;
+  // TODO: calculate it dynamically?
+  static constexpr size_t kMaxScratchRegisters = 0;
 
   size_t NumRegisters() const { return register_liveness_.size(); }
 
@@ -807,17 +922,29 @@ inline MethodBuilder &MethodBuilder::BuildReturn() {
 }
 
 inline MethodBuilder &MethodBuilder::BuildReturn(const Value &src,
-                                                 bool is_object) {
-  AddInstruction(Instruction::OpWithArgs(
-      is_object ? Op::kReturnObject : Op::kReturn, /*destination=*/{}, src));
+                                                 bool is_object, bool is_wide) {
+  if (is_wide) {
+    AddInstruction(
+        Instruction::OpWithArgsWide(Op::kReturnWide, /*destination=*/{}, src));
+  } else {
+    AddInstruction(Instruction::OpWithArgs(
+        is_object ? Op::kReturnObject : Op::kReturn, /*destination=*/{}, src));
+  }
   return *this;
 }
 
-inline MethodBuilder &MethodBuilder::BuildConst4(const Value &target,
-                                                 int value) {
-  assert(value < 16);
+inline MethodBuilder &MethodBuilder::BuildConst(const Value &target,
+                                                int value) {
+  assert(value <= 65535);
   AddInstruction(
       Instruction::OpWithArgs(Op::kMove, target, Value::Immediate(value)));
+  return *this;
+}
+
+inline MethodBuilder &MethodBuilder::BuildConstWide(const Value &target,
+                                                      int value) {
+  AddInstruction(
+      Instruction::OpWithArgs(Op::kMoveWide, target, Value::Immediate(value)));
   return *this;
 }
 
