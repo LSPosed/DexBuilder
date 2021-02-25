@@ -27,9 +27,14 @@ using std::string;
 using ::dex::kAccPublic;
 using Op = Instruction::Op;
 
-const TypeDescriptor TypeDescriptor::Int() { return TypeDescriptor{"I"}; };
-const TypeDescriptor TypeDescriptor::Void() { return TypeDescriptor{"V"}; };
-
+const TypeDescriptor TypeDescriptor::Int{"I"};
+const TypeDescriptor TypeDescriptor::Void{"V"};
+const TypeDescriptor TypeDescriptor::Boolean{"Z"};
+const TypeDescriptor TypeDescriptor::Byte{"B"};
+const TypeDescriptor TypeDescriptor::Char{"C"};
+const TypeDescriptor TypeDescriptor::Double{"D"};
+const TypeDescriptor TypeDescriptor::Float{"F"};
+const TypeDescriptor TypeDescriptor::Long{"F"};
 namespace {
 // From https://source.android.com/devices/tech/dalvik/dex-format#dex-file-magic
 constexpr uint8_t kDexFileMagic[]{0x64, 0x65, 0x78, 0x0a, 0x30, 0x33, 0x38, 0x00};
@@ -169,12 +174,12 @@ void WriteTestDexFile(const string& filename) {
 
   TypeDescriptor string_type = TypeDescriptor::FromClassname("java.lang.String");
 
-  MethodBuilder method{cbuilder.CreateMethod("foo", Prototype{TypeDescriptor::Int(), string_type})};
+  MethodBuilder method{cbuilder.CreateMethod("foo", Prototype{TypeDescriptor::Int, string_type})};
 
   LiveRegister result = method.AllocRegister();
 
   MethodDeclData string_length =
-      dex_file.GetOrDeclareMethod(string_type, "length", Prototype{TypeDescriptor::Int()});
+      dex_file.GetOrDeclareMethod(string_type, "length", Prototype{TypeDescriptor::Int});
 
   method.AddInstruction(Instruction::InvokeVirtual(string_length.id, result, Value::Parameter(0)));
   method.BuildReturn(result);
@@ -239,8 +244,8 @@ ClassBuilder DexBuilder::MakeClass(const std::string& name) {
 }
 
 ir::Type* DexBuilder::GetOrAddType(const std::string& descriptor) {
-  if (types_by_descriptor_.find(descriptor) != types_by_descriptor_.end()) {
-    return types_by_descriptor_[descriptor];
+  if (auto type = types_by_descriptor_.find(descriptor); type != types_by_descriptor_.end()) {
+    return type->second;
   }
 
   ir::Type* type = Alloc<ir::Type>();
@@ -254,8 +259,8 @@ ir::Type* DexBuilder::GetOrAddType(const std::string& descriptor) {
 ir::FieldDecl* DexBuilder::GetOrAddField(TypeDescriptor parent, const std::string& name,
                                          TypeDescriptor type) {
   const auto key = std::make_tuple(parent, name);
-  if (field_decls_by_key_.find(key) != field_decls_by_key_.end()) {
-    return field_decls_by_key_[key];
+  if (auto field = field_decls_by_key_.find(key); field != field_decls_by_key_.end()) {
+    return field->second;
   }
 
   ir::FieldDecl* field = Alloc<ir::FieldDecl>();

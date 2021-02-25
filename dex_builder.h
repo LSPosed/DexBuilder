@@ -60,12 +60,22 @@ class TrackingAllocator : public ::dex::Writer::Allocator {
 class TypeDescriptor {
  public:
   // Named constructors for base type descriptors.
-  static const TypeDescriptor Int();
-  static const TypeDescriptor Void();
+  static const TypeDescriptor Int;
+  static const TypeDescriptor Void;
+  static const TypeDescriptor Boolean;
+  static const TypeDescriptor Byte;
+  static const TypeDescriptor Char;
+  static const TypeDescriptor Double;
+  static const TypeDescriptor Float;
+  static const TypeDescriptor Long;
 
   // Creates a type descriptor from a fully-qualified class name. For example, it turns the class
   // name java.lang.Object into the descriptor Ljava/lang/Object.
   static TypeDescriptor FromClassname(const std::string& name);
+
+  static TypeDescriptor ArrayOf(const TypeDescriptor& base) {
+      return TypeDescriptor{"[" + base.descriptor()};
+  }
 
   // Return the full descriptor, such as I or Ljava/lang/Object
   const std::string& descriptor() const { return descriptor_; }
@@ -73,6 +83,8 @@ class TypeDescriptor {
   std::string short_descriptor() const { return descriptor().substr(0, 1); }
 
   bool is_object() const { return short_descriptor() == "L"; }
+
+  bool is_array() const { return short_descriptor() == "["; }
 
   bool operator<(const TypeDescriptor& rhs) const { return descriptor_ < rhs.descriptor_; }
 
