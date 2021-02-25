@@ -130,8 +130,11 @@ private:
 class Prototype {
 public:
   template <typename... TypeDescriptors>
-  explicit Prototype(TypeDescriptor return_type, TypeDescriptors... param_types)
-      : return_type_{return_type}, param_types_{param_types...} {}
+  explicit Prototype(const TypeDescriptor &return_type, TypeDescriptors&&... param_types)
+      : return_type_{return_type}, param_types_{std::forward<TypeDescriptors>(param_types)...} {}
+
+  explicit Prototype(const TypeDescriptor &return_type, const std::vector<TypeDescriptor>& param_types)
+      : return_type_{return_type}, param_types_{param_types} {}
 
   // Encode this prototype into the dex file.
   ir::Proto *Encode(DexBuilder *dex) const;
@@ -439,7 +442,7 @@ class FieldBuilder {
     DexBuilder* dex_file() const { return parent_->parent(); }
 
     ::dex::u4 access_flags() const { return access_flags_; }
-    void access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; }
+    FieldBuilder& access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; return *this; }
 
   private:
     ClassBuilder* parent_;
@@ -492,7 +495,7 @@ public:
   ClassBuilder *parent() const { return parent_; }
 
   ::dex::u4 access_flags() const { return access_flags_; }
-  void access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; }
+  MethodBuilder& access_flags(const ::dex::u4 &access_flags) { access_flags_ = access_flags; return *this; }
 
 
 private:

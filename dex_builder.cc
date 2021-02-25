@@ -465,10 +465,11 @@ Value MethodBuilder::MakeLabel() {
   return Value::Label(labels_.size() - 1);
 }
 
-void MethodBuilder::AddInstruction(Instruction instruction) {
+MethodBuilder& MethodBuilder::AddInstruction(Instruction instruction) {
   instructions_.push_back(instruction);
+  return *this;
 }
-void MethodBuilder::BuildBoxIfPrimitive(const Value &target,
+MethodBuilder& MethodBuilder::BuildBoxIfPrimitive(const Value &target,
                                         const TypeDescriptor &type,
                                         const Value &src) {
   if (type.is_primitive()) {
@@ -479,9 +480,10 @@ void MethodBuilder::BuildBoxIfPrimitive(const Value &target,
   } else {
     AddInstruction(Instruction::OpWithArgs(Op::kMoveObject, target, src));
   }
+  return *this;
 }
 
-void MethodBuilder::BuildUnBoxIfPrimitive(const Value &target,
+MethodBuilder& MethodBuilder::BuildUnBoxIfPrimitive(const Value &target,
                                           const TypeDescriptor &type,
                                           const Value &src) {
   if (type.is_object()) {
@@ -492,6 +494,7 @@ void MethodBuilder::BuildUnBoxIfPrimitive(const Value &target,
   } else {
     AddInstruction(Instruction::OpWithArgs(Op::kMove, target, src));
   }
+  return *this;
 }
 
 void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
