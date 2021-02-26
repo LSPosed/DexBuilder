@@ -263,6 +263,7 @@ public:
     kCheckCast,
     kGetInstanceField,
     kGetStaticField,
+    kGetStaticObjectField,
     kInvokeDirect,
     kInvokeInterface,
     kInvokeStatic,
@@ -414,6 +415,10 @@ public:
 
   static inline Instruction GetStaticField(size_t field_id, const Value &dest) {
     return Instruction{Op::kGetStaticField, field_id, dest};
+  }
+
+  static inline Instruction GetStaticObjectField(size_t field_id, const Value &dest) {
+    return Instruction{Op::kGetStaticObjectField, field_id, dest};
   }
 
   static inline Instruction GetStaticField(size_t field_id, const Value &dest,

@@ -444,7 +444,7 @@ void GenerateHooker(const string &outdir) {
       hooker_type, "handleHookedMethod",
       Prototype{TypeDescriptor::Object, TypeDescriptor::Object.ToArray()})};
   hookBuilder.AddInstruction(
-      Instruction::GetStaticField(hooker_field->decl->orig_index, tmp));
+      Instruction::GetStaticObjectField(hooker_field->decl->orig_index, tmp));
   hookBuilder.AddInstruction(Instruction::InvokeVirtualObject(
       handle_hook_method.id, tmp, tmp, hook_params_array));
   if (return_type == TypeDescriptor::Void) {

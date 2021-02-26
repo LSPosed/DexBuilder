@@ -158,6 +158,9 @@ std::ostream &operator<<(std::ostream &out, const Instruction::Op &opcode) {
   case Instruction::Op::kGetStaticField:
     out << "kGetStaticField";
     return out;
+  case Instruction::Op::kGetStaticObjectField:
+    out << "kGetStaticObjectField";
+    return out;
   case Instruction::Op::kSetStaticField:
     out << "kSetStaticField";
     return out;
@@ -585,6 +588,7 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
   case Instruction::Op::kCheckCast:
     return EncodeCast(instruction);
   case Instruction::Op::kGetStaticField:
+  case Instruction::Op::kGetStaticObjectField:
   case Instruction::Op::kSetStaticField:
   case Instruction::Op::kSetStaticObjectField:
   case Instruction::Op::kGetInstanceField:
@@ -816,12 +820,15 @@ void MethodBuilder::EncodeAput(const Instruction &instruction) {
 void MethodBuilder::EncodeFieldOp(const Instruction &instruction) {
   const auto &args = instruction.args();
   switch (instruction.opcode()) {
+  case Instruction::Op::kGetStaticObjectField:
   case Instruction::Op::kGetStaticField: {
     assert(instruction.dest().has_value());
     assert(instruction.dest()->is_variable());
     assert(0 == instruction.args().size());
 
-    Encode21c(::dex::Opcode::OP_SGET, RegisterValue(*instruction.dest()),
+    Encode21c(instruction.opcode() == Instruction::Op::kGetStaticField
+                  ? ::dex::Opcode::OP_SGET
+                  : ::dex::Opcode::OP_SGET_OBJECT, RegisterValue(*instruction.dest()),
               instruction.index_argument());
     break;
   }
@@ -831,7 +838,7 @@ void MethodBuilder::EncodeFieldOp(const Instruction &instruction) {
     assert(1 == args.size());
     assert(args[0].is_variable());
 
-    Encode21c(instruction.opcode() == Instruction::Op::kSetInstanceField
+    Encode21c(instruction.opcode() == Instruction::Op::kSetStaticField
                   ? ::dex::Opcode::OP_SPUT
                   : ::dex::Opcode::OP_SPUT_OBJECT,
               RegisterValue(args[0]), instruction.index_argument());
