@@ -18,8 +18,6 @@
 #define DEX_BUILDER_H_
 
 #include <array>
-#include <bits/c++config.h>
-#include <bits/stdint-uintn.h>
 #include <forward_list>
 #include <functional>
 #include <map>
@@ -77,7 +75,6 @@ public:
   static const TypeDescriptor Object;
   static const TypeDescriptor String;
   static const TypeDescriptor ObjectInt;
-  static const TypeDescriptor ObjectVoid;
   static const TypeDescriptor ObjectBoolean;
   static const TypeDescriptor ObjectByte;
   static const TypeDescriptor ObjectChar;
@@ -91,6 +88,8 @@ public:
   // Ljava/lang/Object.
   static TypeDescriptor FromClassname(const std::string &name);
 
+  static TypeDescriptor FromDescriptor(const std::string &descriptor);
+
   TypeDescriptor ToArray() const { return TypeDescriptor{"[" + descriptor_}; }
 
   TypeDescriptor ToBoxType() const;
@@ -100,11 +99,11 @@ public:
   // Return the full descriptor, such as I or Ljava/lang/Object
   const std::string &descriptor() const { return descriptor_; }
   // Return the shorty descriptor, such as I or L
-  char short_descriptor() const { return descriptor_[0]; }
+  char short_descriptor() const;
 
-  bool is_object() const { return short_descriptor() == 'L'; }
+  bool is_object() const { return descriptor_[0] == 'L'; }
 
-  bool is_array() const { return short_descriptor() == '['; }
+  bool is_array() const { return descriptor_[0] == '['; }
 
   bool is_primitive() const { return !is_object() && !is_array(); }
 
@@ -685,6 +684,7 @@ private:
   }
 
   inline void Encode21s(::dex::Opcode opcode, uint8_t a, uint16_t b) {
+    assert(b < 32768);
     Encode21c(opcode, a, b);
   }
 
