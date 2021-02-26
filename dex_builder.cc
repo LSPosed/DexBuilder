@@ -93,23 +93,6 @@ constexpr uint8_t kDexFileMagic[]{0x64, 0x65, 0x78, 0x0a,
 // to five bytes.
 constexpr size_t kMaxEncodedStringLength{5};
 
-// Converts invoke-* to invoke-*/range
-constexpr ::dex::Opcode InvokeToInvokeRange(::dex::Opcode opcode) {
-  switch (opcode) {
-  case ::dex::Opcode::OP_INVOKE_VIRTUAL:
-    return ::dex::Opcode::OP_INVOKE_VIRTUAL_RANGE;
-  case ::dex::Opcode::OP_INVOKE_DIRECT:
-    return ::dex::Opcode::OP_INVOKE_DIRECT_RANGE;
-  case ::dex::Opcode::OP_INVOKE_STATIC:
-    return ::dex::Opcode::OP_INVOKE_STATIC_RANGE;
-  case ::dex::Opcode::OP_INVOKE_INTERFACE:
-    return ::dex::Opcode::OP_INVOKE_INTERFACE_RANGE;
-  default:
-    assert(false);
-    __builtin_unreachable();
-  }
-}
-
 std::string DotToDescriptor(const char *class_name) {
   std::string descriptor(class_name);
   std::replace(descriptor.begin(), descriptor.end(), '.', '/');
@@ -152,6 +135,18 @@ std::ostream &operator<<(std::ostream &out, const Instruction::Op &opcode) {
     return out;
   case Instruction::Op::kInvokeInterface:
     out << "kInvokeInterface";
+    return out;
+  case Instruction::Op::kInvokeVirtualRange:
+    out << "kInvokeVirtualRange";
+    return out;
+  case Instruction::Op::kInvokeDirectRange:
+    out << "kInvokeDirectRange";
+    return out;
+  case Instruction::Op::kInvokeStaticRange:
+    out << "kInvokeStaticRange";
+    return out;
+  case Instruction::Op::kInvokeInterfaceRange:
+    out << "kInvokeInterfaceRange";
     return out;
   case Instruction::Op::kBindLabel:
     out << "kBindLabel";
@@ -543,11 +538,21 @@ MethodBuilder &MethodBuilder::BuildBoxIfPrimitive(const Value &target,
     auto box_type{type.ToBoxType()};
     MethodDeclData value_of{dex_file()->GetOrDeclareMethod(
         box_type, "valueOf", Prototype{box_type, type})};
-    if (type.is_wide())
-      AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src,
-                                                     src.WidePair()));
-    else
-      AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src));
+    if (type.is_wide()) {
+      auto wide_pair = src.WidePair();
+      if (RegisterValue(src) >= 16 || RegisterValue(wide_pair) >= 16) {
+        AddInstruction(Instruction::InvokeStaticObjectRange(value_of.id, target, src, 2));
+      } else {
+        AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src,
+                                                       src.WidePair()));
+      }
+    } else {
+        if(RegisterValue(src) >= 16) {
+            AddInstruction(Instruction::InvokeStaticObjectRange(value_of.id, target, src, 1));
+        } else {
+            AddInstruction(Instruction::InvokeStaticObject(value_of.id, target, src));
+        }
+    }
   } else if (target != src) {
     AddInstruction(Instruction::OpWithArgs(Op::kMoveObject, target, src));
   }
@@ -591,6 +596,14 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
     return EncodeInvoke(instruction, ::dex::Opcode::OP_INVOKE_STATIC);
   case Instruction::Op::kInvokeInterface:
     return EncodeInvoke(instruction, ::dex::Opcode::OP_INVOKE_INTERFACE);
+  case Instruction::Op::kInvokeVirtualRange:
+    return EncodeInvokeRange(instruction, ::dex::Opcode::OP_INVOKE_VIRTUAL_RANGE);
+  case Instruction::Op::kInvokeDirectRange:
+    return EncodeInvokeRange(instruction, ::dex::Opcode::OP_INVOKE_DIRECT_RANGE);
+  case Instruction::Op::kInvokeStaticRange:
+    return EncodeInvokeRange(instruction, ::dex::Opcode::OP_INVOKE_STATIC_RANGE);
+  case Instruction::Op::kInvokeInterfaceRange:
+    return EncodeInvokeRange(instruction, ::dex::Opcode::OP_INVOKE_INTERFACE_RANGE);
   case Instruction::Op::kBindLabel:
     return BindLabel(instruction.args()[0]);
   case Instruction::Op::kBranchEqz:
@@ -702,52 +715,34 @@ void MethodBuilder::EncodeInvoke(const Instruction &instruction,
   }
 
   if (has_long_args) {
-    assert(false && "not supported yet");
-    // Some of the registers don't fit in the four bit short form of the invoke
-    // instruction, so we need to do an invoke/range. To do this, we need to
-    // first move all the arguments into contiguous temporary registers.
-    std::array<Value, kMaxArgs> scratch = GetScratchRegisters<kMaxArgs>();
-
-    const auto &prototype =
-        dex_file()->GetPrototypeByMethodId(instruction.index_argument());
-    assert(prototype.has_value());
-
-    for (size_t i = 0; i < instruction.args().size(); ++i) {
-      Instruction::Op move_op;
-      if (opcode == ::dex::Opcode::OP_INVOKE_VIRTUAL ||
-          opcode == ::dex::Opcode::OP_INVOKE_DIRECT) {
-        // In this case, there is an implicit `this` argument, which is always
-        // an object.
-        if (i == 0) {
-          move_op = Instruction::Op::kMoveObject;
-        } else {
-          move_op = prototype->ArgType(i - 1).is_object()
-                        ? Instruction::Op::kMoveObject
-                        : (prototype->ArgType(i - 1).is_wide()
-                               ? Instruction::Op::kMoveWide
-                               : Instruction::Op::kMove);
-        }
-      } else {
-        move_op = prototype->ArgType(i - 1).is_object()
-                      ? Instruction::Op::kMoveObject
-                      : (prototype->ArgType(i - 1).is_wide()
-                             ? Instruction::Op::kMoveWide
-                             : Instruction::Op::kMove);
-      }
-
-      // FIXME: scratch[i] is not write for wide type
-      EncodeMove(
-          Instruction::OpWithArgs(move_op, scratch[i], instruction.args()[i]));
-    }
-
-    Encode3rc(InvokeToInvokeRange(opcode), instruction.args().size(),
-              instruction.index_argument(), RegisterValue(scratch[0]));
+    assert(false && "long args should use invoke range");
   } else {
     Encode35c(opcode, instruction.args().size(), instruction.index_argument(),
               arguments[0], arguments[1], arguments[2], arguments[3],
               arguments[4]);
   }
 
+  const auto &prototype =
+      dex_file()->GetPrototypeByMethodId(instruction.index_argument());
+  // If there is a return value, add a move-result instruction
+  if (instruction.dest().has_value()) {
+    Encode11x(instruction.result_is_object()
+                  ? ::dex::Opcode::OP_MOVE_RESULT_OBJECT
+                  : (instruction.result_is_wide()
+                         ? ::dex::Opcode::OP_MOVE_RESULT_WIDE
+                         : ::dex::Opcode::OP_MOVE_RESULT),
+              RegisterValue(*instruction.dest()));
+  }
+  max_args_ = std::max(max_args_, instruction.args().size());
+}
+
+void MethodBuilder::EncodeInvokeRange(const Instruction &instruction,
+                                      ::dex::Opcode opcode) {
+  const auto &args = instruction.args();
+  assert(args.size() == 2);
+  assert(args[1].is_immediate());
+  Encode3rc(opcode, args[1].value(),
+            instruction.index_argument(), RegisterValue(args[0]));
   const auto &prototype =
       dex_file()->GetPrototypeByMethodId(instruction.index_argument());
   // If there is a return value, add a move-result instruction
@@ -844,8 +839,8 @@ void MethodBuilder::EncodeFieldOp(const Instruction &instruction) {
 
     Encode21c(instruction.opcode() == Instruction::Op::kGetStaticField
                   ? ::dex::Opcode::OP_SGET
-                  : ::dex::Opcode::OP_SGET_OBJECT, RegisterValue(*instruction.dest()),
-              instruction.index_argument());
+                  : ::dex::Opcode::OP_SGET_OBJECT,
+              RegisterValue(*instruction.dest()), instruction.index_argument());
     break;
   }
   case Instruction::Op::kSetStaticObjectField:
@@ -889,7 +884,7 @@ size_t MethodBuilder::RegisterValue(const Value &value) const {
   if (value.is_register()) {
     return value.value();
   } else if (value.is_parameter()) {
-    return value.value() + NumRegisters() + kMaxScratchRegisters;
+    return value.value() + NumRegisters();
   }
   assert(false && "Must be either a parameter or a register");
   return 0;

@@ -284,6 +284,10 @@ public:
     kInvokeInterface,
     kInvokeStatic,
     kInvokeVirtual,
+    kInvokeDirectRange,
+    kInvokeInterfaceRange,
+    kInvokeStaticRange,
+    kInvokeVirtualRange,
     kMove,
     kMoveObject,
     kMoveWide,
@@ -335,64 +339,44 @@ public:
   static inline Instruction InvokeVirtual(size_t index_argument,
                                           std::optional<const Value> dest,
                                           Value this_arg, T... args) {
-    return Instruction{Op::kInvokeVirtual,
-                       index_argument,
-                       /*result_is_object=*/false,
-                       false,
-                       dest,
-                       this_arg,
-                       args...};
+    return Instruction{
+        Op::kInvokeVirtual,         index_argument,
+        /*result_is_object=*/false, false,          dest, this_arg, args...};
   }
   template <typename... T>
   static inline Instruction InvokeVirtualWide(size_t index_argument,
                                               std::optional<const Value> dest,
                                               Value this_arg, T... args) {
-    return Instruction{Op::kInvokeVirtual,
-                       index_argument,
-                       /*result_is_object=*/false,
-                       true,
-                       dest,
-                       this_arg,
-                       args...};
+    return Instruction{
+        Op::kInvokeVirtual,         index_argument,
+        /*result_is_object=*/false, true,           dest, this_arg, args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction
   InvokeVirtualObject(size_t index_argument, std::optional<const Value> dest,
                       Value this_arg, const T &...args) {
-    return Instruction{Op::kInvokeVirtual,
-                       index_argument,
-                       /*result_is_object=*/true,
-                       false,
-                       dest,
-                       this_arg,
-                       args...};
+    return Instruction{
+        Op::kInvokeVirtual,        index_argument,
+        /*result_is_object=*/true, false,          dest, this_arg, args...};
   }
   // For direct calls (basically, constructors).
   template <typename... T>
   static inline Instruction InvokeDirect(size_t index_argument,
                                          std::optional<const Value> dest,
                                          Value this_arg, const T &...args) {
-    return Instruction{Op::kInvokeDirect,
-                       index_argument,
-                       /*result_is_object=*/false,
-                       false,
-                       dest,
-                       this_arg,
-                       args...};
+    return Instruction{
+        Op::kInvokeDirect,          index_argument,
+        /*result_is_object=*/false, false,          dest, this_arg, args...};
   }
   // Returns an object
   template <typename... T>
   static inline Instruction
   InvokeDirectObject(size_t index_argument, std::optional<const Value> dest,
                      Value this_arg, const T &...args) {
-    return Instruction{Op::kInvokeDirect,
-                       index_argument,
-                       /*result_is_object=*/true,
-                       false,
-                       dest,
-                       this_arg,
-                       args...};
+    return Instruction{
+        Op::kInvokeDirect,         index_argument,
+        /*result_is_object=*/true, false,          dest, this_arg, args...};
   }
   // For static calls.
   template <typename... T>
@@ -411,6 +395,21 @@ public:
         Op::kInvokeStatic,          index_argument,
         /*result_is_object=*/false, true,           dest, args...};
   }
+  static inline Instruction InvokeStaticRange(size_t index_argument,
+                                              std::optional<const Value> dest,
+                                              const Value &first,
+                                              size_t length) {
+    return Instruction{Op::kInvokeStaticRange,     index_argument,
+                       /*result_is_object=*/false, false,          dest, first,
+                       Value::Immediate(length)};
+  }
+  static inline Instruction
+  InvokeStaticRangeWide(size_t index_argument, std::optional<const Value> dest,
+                        const Value &first, size_t length) {
+    return Instruction{Op::kInvokeStaticRange,     index_argument,
+                       /*result_is_object=*/false, true,           dest, first,
+                       Value::Immediate(length)};
+  }
   // Returns an object
   template <typename... T>
   static inline Instruction InvokeStaticObject(size_t index_argument,
@@ -419,6 +418,15 @@ public:
     return Instruction{
         Op::kInvokeStatic,         index_argument,
         /*result_is_object=*/true, false,          dest, args...};
+  }
+  // Returns an object
+  template <typename... T>
+  static inline Instruction
+  InvokeStaticObjectRange(size_t index_argument,
+                          std::optional<const Value> dest, const Value &first, size_t length) {
+    return Instruction{
+        Op::kInvokeStaticRange,    index_argument,
+        /*result_is_object=*/true, false,          dest, first, Value::Immediate(length)};
   }
   // For static calls.
   template <typename... T>
@@ -433,7 +441,8 @@ public:
     return Instruction{Op::kGetStaticField, field_id, dest};
   }
 
-  static inline Instruction GetStaticObjectField(size_t field_id, const Value &dest) {
+  static inline Instruction GetStaticObjectField(size_t field_id,
+                                                 const Value &dest) {
     return Instruction{Op::kGetStaticObjectField, field_id, dest};
   }
 
@@ -451,9 +460,9 @@ public:
   }
 
   static inline Instruction SetStaticObjectField(size_t field_id,
-                                           const Value &value) {
+                                                 const Value &value) {
     return Instruction{
-        Op::kSetStaticObjectField,        field_id,
+        Op::kSetStaticObjectField,  field_id,
         /*result_is_object=*/false, false,    /*dest=*/{}, value};
   }
 
@@ -646,6 +655,9 @@ public:
     return *this;
   }
 
+  // Converts a register or parameter to its DEX register number.
+  size_t RegisterValue(const Value &value) const;
+
 private:
   using Op = Instruction::Op;
 
@@ -659,6 +671,7 @@ private:
 
   void EncodeMove(const Instruction &instruction);
   void EncodeInvoke(const Instruction &instruction, ::dex::Opcode opcode);
+  void EncodeInvokeRange(const Instruction &instruction, ::dex::Opcode opcode);
   void EncodeBranch(::dex::Opcode op, const Instruction &instruction);
   void EncodeNew(const Instruction &instruction);
   void EncodeCast(const Instruction &instruction);
@@ -776,9 +789,6 @@ private:
     }
     return regs;
   }
-
-  // Converts a register or parameter to its DEX register number.
-  size_t RegisterValue(const Value &value) const;
 
   // Sets a label's address to the current position in the instruction buffer.
   // If there are any forward references to the label, this function will
@@ -972,7 +982,7 @@ inline MethodBuilder &MethodBuilder::BuildConst(const Value &target,
 }
 
 inline MethodBuilder &MethodBuilder::BuildConstWide(const Value &target,
-                                                      int value) {
+                                                    int value) {
   AddInstruction(
       Instruction::OpWithArgs(Op::kMoveWide, target, Value::Immediate(value)));
   return *this;
