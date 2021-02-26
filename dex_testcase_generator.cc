@@ -17,10 +17,14 @@
 
 #include "dex_builder.h"
 #include "slicer/dex_format.h"
+#include "slicer/reader.h"
 
+#include <cstdint>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <iostream>
+#include <vector>
 
 // Adding tests here requires changes in several other places. See README.md in
 // the view_compiler directory for more information.
@@ -416,7 +420,7 @@ void GenerateHooker(const string &outdir) {
   auto setupBuilder{cbuilder.CreateMethod(
       "setup", Prototype{TypeDescriptor::Void, hooker_type})};
   setupBuilder
-      .AddInstruction(Instruction::SetStaticField(
+      .AddInstruction(Instruction::SetStaticObjectField(
           hooker_field->decl->orig_index, Value::Parameter(0)))
       .BuildReturn()
       .Encode();
@@ -486,6 +490,16 @@ int main(int argc, char **argv) {
   assert(argc == 2);
 
   string outdir = argv[1];
+//   ifstream in(outdir + "/test.dex");
+
+//   std::vector<uint8_t> buf{std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>()};
+
+//   dex::Reader reader(buf.data(), buf.size());
+
+//   reader.CreateFullIr();
+//   auto ir = reader.GetIr();
+//   auto idx = reader.FindClassIndex("Lio/github/xposed/test/T;");
+//   std::cout << ir->classes[idx]->direct_methods[1]->decl->prototype->shorty->c_str() << std::endl;
 
 //   GenerateTrivialDexFile(outdir);
 //   GenerateSimpleTestCases(outdir);

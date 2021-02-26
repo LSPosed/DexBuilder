@@ -161,6 +161,9 @@ std::ostream &operator<<(std::ostream &out, const Instruction::Op &opcode) {
   case Instruction::Op::kSetStaticField:
     out << "kSetStaticField";
     return out;
+  case Instruction::Op::kSetStaticObjectField:
+    out << "kSetStaticObjectField";
+    return out;
   case Instruction::Op::kGetInstanceField:
     out << "kGetInstanceField";
     return out;
@@ -273,34 +276,36 @@ TypeDescriptor TypeDescriptor::ToUnBoxType() const {
   return unbox_type_iter->second;
 }
 char TypeDescriptor::short_descriptor() const {
-    if(descriptor_[0] == '[') return 'L';
-    else return descriptor_[0];
+  if (descriptor_[0] == '[')
+    return 'L';
+  else
+    return descriptor_[0];
 }
 
 TypeDescriptor TypeDescriptor::FromDescriptor(const string &descriptor) {
   switch (descriptor[0]) {
-    case 'I':
-      return Int;
-    case 'Z':
-      return Boolean;
-    case 'C':
-      return Char;
-    case 'J':
-      return Long;
-    case 'S':
-      return Short;
-    case 'F':
-      return Float;
-    case 'D':
-      return Double;
-    case 'B':
-      return Byte;
-    default:
-      return TypeDescriptor{descriptor, false};
+  case 'I':
+    return Int;
+  case 'Z':
+    return Boolean;
+  case 'C':
+    return Char;
+  case 'J':
+    return Long;
+  case 'S':
+    return Short;
+  case 'F':
+    return Float;
+  case 'D':
+    return Double;
+  case 'B':
+    return Byte;
+  default:
+    return TypeDescriptor{descriptor, false};
   }
 }
 
-    DexBuilder::DexBuilder() : dex_file_{std::make_shared<ir::DexFile>()} {
+DexBuilder::DexBuilder() : dex_file_{std::make_shared<ir::DexFile>()} {
   dex_file_->magic = slicer::MemView{kDexFileMagic, sizeof(kDexFileMagic)};
 }
 
@@ -581,6 +586,7 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
     return EncodeCast(instruction);
   case Instruction::Op::kGetStaticField:
   case Instruction::Op::kSetStaticField:
+  case Instruction::Op::kSetStaticObjectField:
   case Instruction::Op::kGetInstanceField:
   case Instruction::Op::kSetInstanceField:
     return EncodeFieldOp(instruction);
@@ -612,24 +618,28 @@ void MethodBuilder::EncodeMove(const Instruction &instruction) {
   const Value &source = instruction.args()[0];
 
   if (source.is_immediate() && Instruction::Op::kMove == instruction.opcode()) {
-    if (RegisterValue(*instruction.dest()) < 16 && source.value() < 8){
-        Encode11n(::dex::Opcode::OP_CONST_4, RegisterValue(*instruction.dest()),
-              source.value());
-    } else if(source.value() <= 65535) {
-        Encode21s(::dex::Opcode::OP_CONST_16, RegisterValue(*instruction.dest()),
-                  source.value());
+    if (RegisterValue(*instruction.dest()) < 16 && source.value() < 8) {
+      Encode11n(::dex::Opcode::OP_CONST_4, RegisterValue(*instruction.dest()),
+                source.value());
+    } else if (source.value() <= 65535) {
+      Encode21s(::dex::Opcode::OP_CONST_16, RegisterValue(*instruction.dest()),
+                source.value());
     } else {
-        Encode31i(::dex::Opcode::OP_CONST, RegisterValue(*instruction.dest()), source.value());
+      Encode31i(::dex::Opcode::OP_CONST, RegisterValue(*instruction.dest()),
+                source.value());
     }
-  } else if (source.is_immediate() && Instruction::Op::kMoveWide == instruction.opcode()) {
-    if(source.value() <= 65535) {
-        Encode21s(::dex::Opcode::OP_CONST_WIDE_16, RegisterValue(*instruction.dest()),
-                  source.value());
-    } else if(source.value() <= 4294967295) {
-        Encode31i(::dex::Opcode::OP_CONST_WIDE_32, RegisterValue(*instruction.dest()), source.value());
+  } else if (source.is_immediate() &&
+             Instruction::Op::kMoveWide == instruction.opcode()) {
+    if (source.value() <= 65535) {
+      Encode21s(::dex::Opcode::OP_CONST_WIDE_16,
+                RegisterValue(*instruction.dest()), source.value());
+    } else if (source.value() <= 4294967295) {
+      Encode31i(::dex::Opcode::OP_CONST_WIDE_32,
+                RegisterValue(*instruction.dest()), source.value());
     } else {
-        assert(false && "not supported yet");
-        // Encode51i(::dex::Opcode::OP_CONST_WIDE, RegisterValue(*instruction.dest()), source.value());
+      assert(false && "not supported yet");
+      // Encode51i(::dex::Opcode::OP_CONST_WIDE,
+      // RegisterValue(*instruction.dest()), source.value());
     }
   } else if (source.is_string()) {
     constexpr size_t kMaxRegisters = 256;
@@ -815,13 +825,16 @@ void MethodBuilder::EncodeFieldOp(const Instruction &instruction) {
               instruction.index_argument());
     break;
   }
+  case Instruction::Op::kSetStaticObjectField:
   case Instruction::Op::kSetStaticField: {
     assert(!instruction.dest().has_value());
     assert(1 == args.size());
     assert(args[0].is_variable());
 
-    Encode21c(::dex::Opcode::OP_SPUT, RegisterValue(args[0]),
-              instruction.index_argument());
+    Encode21c(instruction.opcode() == Instruction::Op::kSetInstanceField
+                  ? ::dex::Opcode::OP_SPUT
+                  : ::dex::Opcode::OP_SPUT_OBJECT,
+              RegisterValue(args[0]), instruction.index_argument());
     break;
   }
   case Instruction::Op::kGetInstanceField: {

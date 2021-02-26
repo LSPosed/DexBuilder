@@ -277,6 +277,7 @@ public:
     kReturnWide,
     kSetInstanceField,
     kSetStaticField,
+    kSetStaticObjectField,
     kAputObject,
   };
 
@@ -425,6 +426,13 @@ public:
                                            const Value &value) {
     return Instruction{
         Op::kSetStaticField,        field_id,
+        /*result_is_object=*/false, false,    /*dest=*/{}, value};
+  }
+
+  static inline Instruction SetStaticObjectField(size_t field_id,
+                                           const Value &value) {
+    return Instruction{
+        Op::kSetStaticObjectField,        field_id,
         /*result_is_object=*/false, false,    /*dest=*/{}, value};
   }
 
