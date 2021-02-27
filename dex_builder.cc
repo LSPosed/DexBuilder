@@ -451,6 +451,11 @@ FieldBuilder ClassBuilder::CreateField(const std::string &name,
   return {this, class_, decl};
 }
 
+ClassBuilder ClassBuilder::setSuperClass(const TypeDescriptor &type) {
+    class_->super_class = parent_->GetOrAddType(type);
+    return *this;
+}
+
 void ClassBuilder::set_source_file(const string &source) {
   class_->source_file = parent_->GetOrAddString(source);
 }

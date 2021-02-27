@@ -566,6 +566,8 @@ public:
 
   FieldBuilder CreateField(const std::string &name, const TypeDescriptor &type);
 
+  ClassBuilder setSuperClass(const TypeDescriptor &type);
+
   DexBuilder *parent() const { return parent_; }
 
   const TypeDescriptor &descriptor() const { return type_descriptor_; }
