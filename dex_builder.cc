@@ -338,8 +338,11 @@ ir::String *DexBuilder::GetOrAddString(const std::string &string) {
     // for null terminator
     auto buffer = std::make_unique<uint8_t[]>(string.size() +
                                               kMaxEncodedStringLength + 1);
+    size_t actual_len = 0u;
+    const char* s = string.data();
+    while (*s) actual_len += (*s++ & 0xc0) != 0x80;
     uint8_t *string_data_start =
-        ::dex::WriteULeb128(buffer.get(), string.size());
+        ::dex::WriteULeb128(buffer.get(), actual_len);
 
     size_t header_length = reinterpret_cast<uintptr_t>(string_data_start) -
                            reinterpret_cast<uintptr_t>(buffer.get());
