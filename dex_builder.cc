@@ -280,6 +280,7 @@ TypeDescriptor TypeDescriptor::ToBoxType() const {
     return ObjectByte;
   default:
     assert(false);
+    return Object;
   }
 }
 
@@ -979,4 +980,4 @@ ir::Proto *DexBuilder::GetOrEncodeProto(Prototype prototype) {
 }
 
 } // namespace dex
-} // namespace startop
+} // 
