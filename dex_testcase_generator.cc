@@ -427,7 +427,7 @@ void GenerateHooker(const string &outdir) {
   cbuilder.set_source_file("dex_testcase_generator.cc#GenerateHooker");
 
   auto hooker_type =
-      TypeDescriptor::FromClassname("de.robv.android.xposed.LspHooker");
+      TypeDescriptor::FromClassname("org.lsposed.lspd.hooker.LspHooker");
 
   auto *hooker_field = cbuilder.CreateField("hooker", hooker_type)
                            .access_flags(dex::kAccStatic)

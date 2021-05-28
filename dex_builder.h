@@ -106,6 +106,8 @@ public:
 
   static TypeDescriptor FromDescriptor(const std::string &descriptor);
 
+  static TypeDescriptor FromDescriptor(const char descriptor);
+
   TypeDescriptor ToArray() const { return TypeDescriptor{"[" + descriptor_}; }
 
   TypeDescriptor ToBoxType() const;

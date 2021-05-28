@@ -297,6 +297,31 @@ char TypeDescriptor::short_descriptor() const {
     return descriptor_[0];
 }
 
+TypeDescriptor TypeDescriptor::FromDescriptor(const char descriptor) {
+  switch (descriptor) {
+    case 'I':
+      return Int;
+    case 'Z':
+      return Boolean;
+    case 'C':
+      return Char;
+    case 'J':
+      return Long;
+    case 'S':
+      return Short;
+    case 'F':
+      return Float;
+    case 'D':
+      return Double;
+    case 'B':
+      return Byte;
+    case 'V':
+      return Void;
+    default:
+      return Object;
+  }
+}
+
 TypeDescriptor TypeDescriptor::FromDescriptor(const string &descriptor) {
   switch (descriptor[0]) {
   case 'I':
@@ -315,6 +340,8 @@ TypeDescriptor TypeDescriptor::FromDescriptor(const string &descriptor) {
     return Double;
   case 'B':
     return Byte;
+  case 'V':
+    return Void;
   default:
     return TypeDescriptor{descriptor, false};
   }
