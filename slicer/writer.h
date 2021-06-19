@@ -110,7 +110,7 @@ class Index {
   dex::u4 size() const { return count_ * sizeof(T); }
 
   T& operator[](dex::u4 i) {
-    SLICER_CHECK(i > 0 && i < count_);
+    SLICER_CHECK(i < count_);
     return values_[i];
   }
 
