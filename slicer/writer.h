@@ -109,8 +109,8 @@ class Index {
   const T* data() const { return values_.get(); }
   dex::u4 size() const { return count_ * sizeof(T); }
 
-  T& operator[](dex::u4 i) {
-    SLICER_CHECK(i > 0 && i < count_);
+  T& operator[](int i) {
+    SLICER_CHECK(i >= 0 && i < count_);
     return values_[i];
   }
 
