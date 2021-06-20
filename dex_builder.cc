@@ -758,8 +758,6 @@ void MethodBuilder::EncodeInvoke(const Instruction &instruction,
               arguments[4]);
   }
 
-  const auto &prototype =
-      dex_file()->GetPrototypeByMethodId(instruction.index_argument());
   // If there is a return value, add a move-result instruction
   if (instruction.dest().has_value()) {
     Encode11x(instruction.result_is_object()
@@ -779,8 +777,6 @@ void MethodBuilder::EncodeInvokeRange(const Instruction &instruction,
   assert(args[1].is_immediate());
   Encode3rc(opcode, args[1].value(),
             instruction.index_argument(), RegisterValue(args[0]));
-  const auto &prototype =
-      dex_file()->GetPrototypeByMethodId(instruction.index_argument());
   // If there is a return value, add a move-result instruction
   if (instruction.dest().has_value()) {
     Encode11x(instruction.result_is_object()
