@@ -5,6 +5,7 @@ add_definitions(-std=c++17)
 
 set(DB_SOURCES
         dex_builder.cc
+        slicer/reader.cc
         slicer/writer.cc
         slicer/dex_ir.cc
         slicer/common.cc
