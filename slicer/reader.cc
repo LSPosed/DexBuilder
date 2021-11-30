@@ -436,7 +436,7 @@ static T ParseIntValue(const dex::u1** pptr, size_t size) {
   SLICER_CHECK(size <= sizeof(T));
 
   T value = 0;
-  for (int i = 0; i < size; ++i) {
+  for (size_t i = 0; i < size; ++i) {
     value |= T(*(*pptr)++) << (i * 8);
   }
 

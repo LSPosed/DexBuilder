@@ -111,7 +111,7 @@ class Reader {
   // Convert a data section file pointer (absolute offset) to an in-memory pointer
   // (offset should be inside the data section)
   template <class T>
-  const T* dataPtr(int offset) const {
+  const T* dataPtr(size_t offset) const {
     SLICER_CHECK(offset >= header_->data_off && offset + sizeof(T) <= size_);
     return reinterpret_cast<const T*>(image_ + offset);
   }
