@@ -36,7 +36,6 @@
 #include "slicer/dex_format.h"
 #include "slicer/dex_ir.h"
 
-#include <fstream>
 #include <memory>
 
 namespace startop {
@@ -104,111 +103,6 @@ std::string DotToDescriptor(const char *class_name) {
 
 } // namespace
 
-std::ostream &operator<<(std::ostream &out, const Instruction::Op &opcode) {
-  switch (opcode) {
-  case Instruction::Op::kReturn:
-    out << "kReturn";
-    return out;
-  case Instruction::Op::kReturnObject:
-    out << "kReturnObject";
-    return out;
-  case Instruction::Op::kReturnWide:
-    out << "kReturnWide";
-    return out;
-  case Instruction::Op::kMove:
-    out << "kMove";
-    return out;
-  case Instruction::Op::kMoveObject:
-    out << "kMoveObject";
-    return out;
-  case Instruction::Op::kMoveWide:
-    out << "kMoveWide";
-    return out;
-  case Instruction::Op::kInvokeVirtual:
-    out << "kInvokeVirtual";
-    return out;
-  case Instruction::Op::kInvokeDirect:
-    out << "kInvokeDirect";
-    return out;
-  case Instruction::Op::kInvokeStatic:
-    out << "kInvokeStatic";
-    return out;
-  case Instruction::Op::kInvokeInterface:
-    out << "kInvokeInterface";
-    return out;
-  case Instruction::Op::kInvokeVirtualRange:
-    out << "kInvokeVirtualRange";
-    return out;
-  case Instruction::Op::kInvokeDirectRange:
-    out << "kInvokeDirectRange";
-    return out;
-  case Instruction::Op::kInvokeStaticRange:
-    out << "kInvokeStaticRange";
-    return out;
-  case Instruction::Op::kInvokeInterfaceRange:
-    out << "kInvokeInterfaceRange";
-    return out;
-  case Instruction::Op::kBindLabel:
-    out << "kBindLabel";
-    return out;
-  case Instruction::Op::kBranchEqz:
-    out << "kBranchEqz";
-    return out;
-  case Instruction::Op::kBranchNEqz:
-    out << "kBranchNEqz";
-    return out;
-  case Instruction::Op::kNew:
-    out << "kNew";
-    return out;
-  case Instruction::Op::kNewArray:
-    out << "kNewArray";
-    return out;
-  case Instruction::Op::kCheckCast:
-    out << "kCheckCast";
-    return out;
-  case Instruction::Op::kGetStaticField:
-    out << "kGetStaticField";
-    return out;
-  case Instruction::Op::kGetStaticObjectField:
-    out << "kGetStaticObjectField";
-    return out;
-  case Instruction::Op::kSetStaticField:
-    out << "kSetStaticField";
-    return out;
-  case Instruction::Op::kSetStaticObjectField:
-    out << "kSetStaticObjectField";
-    return out;
-  case Instruction::Op::kGetInstanceField:
-    out << "kGetInstanceField";
-    return out;
-  case Instruction::Op::kSetInstanceField:
-    out << "kSetInstanceField";
-    return out;
-  case Instruction::Op::kAputObject:
-    out << "kAputObject";
-    return out;
-  }
-}
-
-std::ostream &operator<<(std::ostream &out, const Value &value) {
-  if (value.is_register()) {
-    out << "Register(" << value.value() << ")";
-  } else if (value.is_parameter()) {
-    out << "Parameter(" << value.value() << ")";
-  } else if (value.is_immediate()) {
-    out << "Immediate(" << value.value() << ")";
-  } else if (value.is_string()) {
-    out << "String(" << value.value() << ")";
-  } else if (value.is_label()) {
-    out << "Label(" << value.value() << ")";
-  } else if (value.is_type()) {
-    out << "Type(" << value.value() << ")";
-  } else {
-    out << "UnknownValue";
-  }
-  return out;
-}
-
 void *TrackingAllocator::Allocate(size_t size) {
   std::unique_ptr<uint8_t[]> buffer = std::make_unique<uint8_t[]>(size);
   void *raw_buffer = buffer.get();
@@ -226,34 +120,6 @@ void TrackingAllocator::Free(void *ptr) {
 // public class DexTest {
 //     public static int foo(String s) { return s.length(); }
 // }
-void WriteTestDexFile(const string &filename) {
-  DexBuilder dex_file;
-
-  ClassBuilder cbuilder{dex_file.MakeClass("dextest.DexTest")};
-  cbuilder.set_source_file("dextest.java");
-
-  TypeDescriptor string_type =
-      TypeDescriptor::FromClassname("java.lang.String");
-
-  MethodBuilder method{cbuilder.CreateMethod(
-      "foo", Prototype{TypeDescriptor::Int, string_type})};
-
-  LiveRegister result = method.AllocRegister();
-
-  MethodDeclData string_length = dex_file.GetOrDeclareMethod(
-      string_type, "length", Prototype{TypeDescriptor::Int});
-
-  method.AddInstruction(Instruction::InvokeVirtual(string_length.id, result,
-                                                   Value::Parameter(0)));
-  method.BuildReturn(result);
-
-  method.Encode();
-
-  slicer::MemView image{dex_file.CreateImage()};
-
-  std::ofstream out_file(filename);
-  out_file.write(image.ptr<const char>(), image.size());
-}
 
 TypeDescriptor TypeDescriptor::FromClassname(const std::string &name) {
   return TypeDescriptor{DotToDescriptor(name.c_str())};

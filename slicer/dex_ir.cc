@@ -24,7 +24,6 @@
 #include <map>
 #include <memory>
 #include <vector>
-#include <sstream>
 #include <functional>
 
 namespace ir {
@@ -97,16 +96,16 @@ Type::Category Type::GetCategory() const {
 // Create the corresponding JNI signature:
 //  https://docs.oracle.com/javase/8/docs/technotes/guides/jni/spec/types.html#type_signatures
 std::string Proto::Signature() const {
-  std::stringstream ss;
-  ss << "(";
+  std::string ss;
+  ss += "(";
   if (param_types != nullptr) {
     for (const auto& type : param_types->types) {
-      ss << type->descriptor->c_str();
+      ss += type->descriptor->c_str();
     }
   }
-  ss << ")";
-  ss << return_type->descriptor->c_str();
-  return ss.str();
+  ss += ")";
+  ss += return_type->descriptor->c_str();
+  return ss;
 }
 
 // Helper for IR normalization

@@ -50,9 +50,6 @@
 namespace startop {
 namespace dex {
 
-// TODO: remove this once the dex generation code is complete.
-void WriteTestDexFile(const std::string &filename);
-
 //////////////////////////
 // Forward declarations //
 //////////////////////////
