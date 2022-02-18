@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include "writer.h"
-#include "common.h"
-#include "scopeguard.h"
-#include "dex_bytecode.h"
-#include "dex_format.h"
-#include "dex_ir.h"
-#include "dex_leb128.h"
+#include "slicer/writer.h"
+#include "slicer/common.h"
+#include "slicer/scopeguard.h"
+#include "slicer/dex_bytecode.h"
+#include "slicer/dex_format.h"
+#include "slicer/dex_ir.h"
+#include "slicer/dex_leb128.h"
 
 #include <assert.h>
 #include <type_traits>

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "common.h"
+#include "slicer/common.h"
 
 #include <stdio.h>
 #include <stdlib.h>

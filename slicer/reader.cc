@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "reader.h"
-#include "dex_bytecode.h"
-#include "chronometer.h"
-#include "dex_leb128.h"
+#include "slicer/reader.h"
+#include "slicer/dex_bytecode.h"
+#include "slicer/chronometer.h"
+#include "slicer/dex_leb128.h"
 
 #include <assert.h>
 #include <string.h>

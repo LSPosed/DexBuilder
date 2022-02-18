@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "dex_bytecode.h"
-#include "common.h"
+#include "slicer/dex_bytecode.h"
+#include "slicer/common.h"
 
 #include <assert.h>
 #include <array>
@@ -37,7 +37,7 @@ static constexpr std::array<InstructionDescriptor, kNumPackedOpcodes>
       index,                                                        \
       flags,                                                        \
   },
-#include "dex_instruction_list.h"
+#include "slicer/dex_instruction_list.h"
         DEX_INSTRUCTION_LIST(INSTRUCTION_DESCR)
 #undef DEX_INSTRUCTION_LIST
 #undef INSTRUCTION_DESCR
@@ -122,7 +122,7 @@ size_t GetWidthFromBytecode(const u2* bytecode) {
 // Dalvik opcode names.
 static constexpr std::array<const char*, kNumPackedOpcodes> gOpcodeNames = {
 #define INSTRUCTION_NAME(o, c, pname, f, i, a, e, v) pname,
-#include "dex_instruction_list.h"
+#include "slicer/dex_instruction_list.h"
     DEX_INSTRUCTION_LIST(INSTRUCTION_NAME)
 #undef DEX_INSTRUCTION_LIST
 #undef INSTRUCTION_NAME

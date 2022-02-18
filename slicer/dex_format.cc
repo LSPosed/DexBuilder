@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include "dex_format.h"
-#include "common.h"
+#include "slicer/dex_format.h"
+#include "slicer/common.h"
 
 #include <zlib.h>
 
