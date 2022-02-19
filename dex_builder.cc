@@ -577,8 +577,7 @@ void MethodBuilder::EncodeMove(const Instruction &instruction) {
       // RegisterValue(*instruction.dest()), source.value());
     }
   } else if (source.is_string()) {
-    constexpr size_t kMaxRegisters = 256;
-    assert(RegisterValue(*instruction.dest()) < kMaxRegisters);
+    assert(RegisterValue(*instruction.dest()) < 256);
     assert(source.value() < 65536); // make sure we don't need a jumbo string
     Encode21c(::dex::Opcode::OP_CONST_STRING,
               RegisterValue(*instruction.dest()), source.value());
