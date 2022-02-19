@@ -11,6 +11,7 @@ LOCAL_EXPORT_LDLIBS     := -lz
 LOCAL_LDLIBS            := -lz
 LOCAL_CFLAGS            := -fvisibility=default -fvisibility-inlines-hidden -flto
 LOCAL_LDFLAGS           := -flto
+LOCAL_STATIC_LIBRARIES  := libcxx
 include $(BUILD_SHARED_LIBRARY)
 
 include $(CLEAR_VARS)
