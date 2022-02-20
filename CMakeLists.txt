@@ -1,6 +1,13 @@
 cmake_minimum_required(VERSION 3.4.1)
 project(dex_builder)
 
+find_program(CCACHE ccache)
+
+if (CCACHE)
+    set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE})
+    set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE})
+endif ()
+
 add_definitions(-std=c++20)
 
 set(DB_SOURCES
@@ -26,6 +33,15 @@ target_include_directories(${PROJECT_NAME}_static PUBLIC include)
 
 target_link_libraries(${PROJECT_NAME} PUBLIC z log)
 target_link_libraries(${PROJECT_NAME}_static PUBLIC z log)
+
+if (NOT DEFINED DEBUG_SYMBOLS_PATH)
+    set(DEBUG_SYMBOLS_PATH ${CMAKE_BINARY_DIR}/symbols)
+endif()
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy $<TARGET_FILE:${PROJECT_NAME}>
+        ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}/${PROJECT_NAME}
+        COMMAND ${CMAKE_STRIP} --strip-all $<TARGET_FILE:${PROJECT_NAME}>)
 
 set(CFLAGS
         -flto
