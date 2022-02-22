@@ -86,7 +86,7 @@ const std::unordered_map<TypeDescriptor, std::string> value_method_map{
 namespace {
 // From https://source.android.com/devices/tech/dalvik/dex-format#dex-file-magic
 constexpr uint8_t kDexFileMagic[]{0x64, 0x65, 0x78, 0x0a,
-                                  0x30, 0x33, 0x38, 0x00};
+                                  0x30, 0x33, 0x35, 0x00};
 
 // Strings lengths can be 32 bits long, but encoded as LEB128 this can take up
 // to five bytes.
