@@ -39,13 +39,18 @@ class Reader {
   Reader(const dex::u1* image, size_t size);
   ~Reader() = default;
 
-  // No copy/move semantics
+  Reader(Reader&&) = default;
+  Reader& operator=(Reader&&) = default;
+
+  // No copy semantics
   Reader(const Reader&) = delete;
   Reader& operator=(const Reader&) = delete;
 
  public:
   // Low level dex format interface
   const dex::Header* Header() const { return header_; }
+  const dex::u1* Image() const { return image_; }
+  const size_t Size() const { return size_; }
   const char* GetStringMUTF8(dex::u4 index) const;
   slicer::ArrayView<const dex::ClassDef> ClassDefs() const;
   slicer::ArrayView<const dex::StringId> StringIds() const;
