@@ -8,7 +8,7 @@
 
 class DexHelper {
 public:
-    DexHelper(const std::vector<std::tuple<const void *, size_t>> &dexs);
+    DexHelper(const std::vector<std::tuple<const void *, size_t, const void *, size_t>> &dexs);
 
     void CreateFullCache() const;
 
@@ -124,7 +124,7 @@ private:
     // strings[dex][str_id] -> str
     std::vector<std::vector<std::string_view>> strings_;
     // method_codes[dex][method_id] -> code
-    std::vector<std::vector<const dex::Code *>> method_codes_;
+    std::vector<std::vector<const dex::CodeItem *>> method_codes_;
     std::vector<std::vector<const dex::TypeList *>> method_params_;
 
     // for cache

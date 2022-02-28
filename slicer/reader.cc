@@ -26,7 +26,7 @@
 
 namespace dex {
 
-Reader::Reader(const dex::u1* image, size_t size) : image_(image), size_(size) {
+Reader::Reader(const dex::u1* image, size_t size, const dex::u1* data, size_t data_size) : image_(image), size_(size), data_(data ? data : image), data_size_(data ? data_size : size) {
   // init the header reference
   header_ = ptr<dex::Header>(0);
   ValidateHeader();
@@ -87,7 +87,7 @@ void Reader::CreateFullIr() {
 }
 
 void Reader::CreateClassIr(dex::u4 index) {
-  auto ir_class = GetClass(index);
+  [[maybe_unused]] auto ir_class = GetClass(index);
   SLICER_CHECK(ir_class != nullptr);
 }
 
@@ -933,7 +933,15 @@ void Reader::ValidateHeader() {
   // Known issue: For performance reasons the initial size_ passed to jvmti events might be an
   // estimate. b/72402467
   SLICER_CHECK(header_->file_size <= size_);
-  SLICER_CHECK(header_->header_size == sizeof(dex::Header));
+  static_assert(sizeof(dex::Header) == 112);
+  static_assert(sizeof(dex::CompactHeader) == 136);
+  if (IsCompact(header_)) {
+    SLICER_CHECK(header_->header_size == sizeof(dex::CompactHeader));
+    is_compact_ = true;
+  } else {
+    SLICER_CHECK(header_->header_size == sizeof(dex::Header));
+    is_compact_ = false;
+  }
   SLICER_CHECK(header_->endian_tag == dex::kEndianConstant);
   SLICER_CHECK(header_->data_size % 4 == 0);
 
@@ -948,7 +956,9 @@ void Reader::ValidateHeader() {
   SLICER_CHECK(header_->field_ids_off % 4 == 0);
   SLICER_CHECK(header_->method_ids_off % 4 == 0);
   SLICER_CHECK(header_->class_defs_off % 4 == 0);
-  SLICER_CHECK(header_->map_off >= header_->data_off && header_->map_off < size_);
+  if (!is_compact_) {
+    SLICER_CHECK(header_->map_off >= header_->data_off && header_->map_off < size_);
+  }
   SLICER_CHECK(header_->link_size == 0);
   SLICER_CHECK(header_->link_off == 0);
   SLICER_CHECK(header_->data_off % 4 == 0);
@@ -957,7 +967,7 @@ void Reader::ValidateHeader() {
   // we seem to have .dex files with extra bytes at the end ...
   // Known issue: For performance reasons the initial size_ passed to jvmti events might be an
   // estimate. b/72402467
-  SLICER_WEAK_CHECK(header_->data_off + header_->data_size <= size_);
+  SLICER_WEAK_CHECK(header_->data_off + header_->data_size <= data_size_);
 
   // but we should still have the whole data section
 
@@ -968,11 +978,11 @@ void Reader::ValidateHeader() {
 
   // validate the map
   // (map section size = sizeof(MapList::size) + sizeof(MapList::list[size])
-  auto map_list = ptr<dex::MapList>(header_->map_off);
+  auto map_list = DexMapList();
   SLICER_CHECK(map_list->size > 0);
-  auto map_section_size =
+  [[maybe_unused]] auto map_section_size =
       sizeof(dex::u4) + sizeof(dex::MapItem) * map_list->size;
-  SLICER_CHECK(header_->map_off + map_section_size <= size_);
+  SLICER_CHECK(header_->map_off + map_section_size <= data_size_);
 }
 
 }  // namespace dex

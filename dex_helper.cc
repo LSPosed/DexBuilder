@@ -19,9 +19,9 @@ constexpr uint8_t opcode_len[] = {
 static_assert(sizeof(opcode_len) == 256);
 }  // namespace
 
-DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t>> &dexs) {
-    for (const auto &[image, size] : dexs) {
-        readers_.emplace_back(static_cast<const dex::u1 *>(image), size);
+DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const void *, size_t>> &dexs) {
+    for (const auto &[image, size, data, data_size] : dexs) {
+        readers_.emplace_back(static_cast<const dex::u1 *>(image), size, static_cast<const dex::u1 *>(data), data_size);
     }
     size_t dex_count = readers_.size();
 
@@ -73,7 +73,7 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t>> &dexs) 
         auto &dex = readers_[dex_idx];
         auto &strs = strings_[dex_idx];
         for (const auto &str : dex.StringIds()) {
-            const auto *ptr = reinterpret_cast<const dex::u1 *>(dex.Image() + str.string_data_off);
+            const auto *ptr = dex.dataPtr<dex::u1>(str.string_data_off);
             size_t len = dex::ReadULeb128(&ptr);
             strs.emplace_back(reinterpret_cast<const char *>(ptr), len);
         }
@@ -85,8 +85,7 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t>> &dexs) 
             const auto &class_def = dex.ClassDefs()[class_idx];
             class_cache_[dex_idx][class_def.class_idx] = class_idx;
             if (class_def.class_data_off == 0) continue;
-            const auto *class_data =
-                reinterpret_cast<const dex::u1 *>(dex.Image() + class_def.class_data_off);
+            const auto *class_data = dex.dataPtr<dex::u1>(class_def.class_data_off);
             dex::u4 static_fields_count = dex::ReadULeb128(&class_data);
             dex::u4 instance_fields_count = dex::ReadULeb128(&class_data);
             dex::u4 direct_methods_count = dex::ReadULeb128(&class_data);
@@ -111,13 +110,12 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t>> &dexs) 
                 dex::ReadULeb128(&class_data);
                 auto offset = dex::ReadULeb128(&class_data);
                 if (offset != 0) {
-                    codes[method_idx] = reinterpret_cast<const dex::Code *>(dex.Image() + offset);
+                    codes[method_idx] = dex.dataPtr<const dex::CodeItem>(offset);
                 }
                 auto parameters_offset =
                     dex.ProtoIds()[dex.MethodIds()[method_idx].proto_idx].parameters_off;
                 if (parameters_offset) {
-                    params[method_idx] =
-                        reinterpret_cast<const dex::TypeList *>(dex.Image() + parameters_offset);
+                    params[method_idx] = dex.dataPtr<dex::TypeList>(parameters_offset);
                 }
             }
 
@@ -126,13 +124,12 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t>> &dexs) 
                 dex::ReadULeb128(&class_data);
                 auto offset = dex::ReadULeb128(&class_data);
                 if (offset != 0) {
-                    codes[method_idx] = reinterpret_cast<const dex::Code *>(dex.Image() + offset);
+                    codes[method_idx] = dex.dataPtr<dex::CodeItem>(offset);
                 }
                 auto parameters_offset =
                     dex.ProtoIds()[dex.MethodIds()[method_idx].proto_idx].parameters_off;
                 if (parameters_offset) {
-                    params[method_idx] =
-                        reinterpret_cast<const dex::TypeList *>(dex.Image() + parameters_offset);
+                    params[method_idx] = dex.dataPtr<dex::TypeList>(parameters_offset);
                 }
             }
         }
@@ -210,6 +207,7 @@ bool DexHelper::ScanMethod(size_t dex_idx, uint32_t method_id, size_t str_lower,
     static constexpr dex::u2 kInstPackedSwitchPlayLoad = 0x0100;
     static constexpr dex::u2 kInstSparseSwitchPlayLoad = 0x0200;
     static constexpr dex::u2 kInstFillArrayDataPlayLoad = 0x0300;
+    auto &dex = readers_[dex_idx];
     auto &str_cache = string_cache_[dex_idx];
     auto &inv_cache = invoking_cache_[dex_idx];
     auto &inved_cache = invoked_cache_[dex_idx];
@@ -226,8 +224,15 @@ bool DexHelper::ScanMethod(size_t dex_idx, uint32_t method_id, size_t str_lower,
     if (!code) {
         return match_str;
     }
-    const dex::u2 *inst = code->insns;
-    const dex::u2 *end = code->insns + code->insns_size;
+    const dex::u2 *inst;
+    const dex::u2 *end;
+    if (dex.IsCompact()) {
+        inst = reinterpret_cast<const dex::CompactCode*>(code)->insns;
+        end = inst + (reinterpret_cast<const dex::CompactCode*>(code)->insns_count_and_flags >> dex::CompactCode::kInsnsSizeShift);
+    } else {
+        inst = reinterpret_cast<const dex::Code*>(code)->insns;
+        end = inst + reinterpret_cast<const dex::Code*>(code)->insns_size;
+    }
     size_t ins_count = 0;
     while (inst < end) {
         ins_count++;

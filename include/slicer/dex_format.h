@@ -157,6 +157,15 @@ struct Header {
   u4 data_off;
 };
 
+struct CompactHeader : public Header {
+    u4 feature_flags;
+    u4 debug_info_offsets_pos;
+    u4 debug_info_offsets_table_offset;
+    u4 debug_info_base;
+    u4 owned_data_begin;
+    u4 owned_data_end;
+};
+
 // "map_item"
 struct MapItem {
   u2 type;
@@ -225,8 +234,12 @@ struct TypeList {
   TypeItem list[];
 };
 
+struct CodeItem{
+
+};
+
 // "code_item"
-struct Code {
+struct Code : CodeItem {
   u2 registers_size;
   u2 ins_size;
   u2 outs_size;
@@ -238,6 +251,13 @@ struct Code {
   // followed by try_item[tries_size]
   // followed by uleb128 handlersSize
   // followed by catch_handler_item[handlersSize]
+};
+
+struct CompactCode : CodeItem {
+  static constexpr size_t kInsnsSizeShift = 5;
+  uint16_t fields;
+  uint16_t insns_count_and_flags;
+  uint16_t insns[];
 };
 
 // "try_item"

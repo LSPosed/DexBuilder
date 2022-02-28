@@ -93,7 +93,8 @@ char DescriptorToShorty(const char* descriptor) {
   char short_descriptor = *descriptor;
   if (short_descriptor == 'L') {
     // skip the full class name
-    for(; *descriptor && *descriptor != ';'; ++descriptor);
+    for(; *descriptor && *descriptor != ';'; ++descriptor) {
+    }
     SLICER_CHECK(*descriptor == ';');
   }
 

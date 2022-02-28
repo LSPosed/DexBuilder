@@ -36,7 +36,7 @@ namespace dex {
 //
 class Reader {
  public:
-  Reader(const dex::u1* image, size_t size);
+  Reader(const dex::u1* image, size_t size, const dex::u1* data = nullptr, size_t data_size = 0);
   ~Reader() = default;
 
   Reader(Reader&&) = default;
@@ -49,8 +49,7 @@ class Reader {
  public:
   // Low level dex format interface
   const dex::Header* Header() const { return header_; }
-  const dex::u1* Image() const { return image_; }
-  const size_t Size() const { return size_; }
+  const bool IsCompact() const { return is_compact_; }
   const char* GetStringMUTF8(dex::u4 index) const;
   slicer::ArrayView<const dex::ClassDef> ClassDefs() const;
   slicer::ArrayView<const dex::StringId> StringIds() const;
@@ -60,12 +59,36 @@ class Reader {
   slicer::ArrayView<const dex::ProtoId> ProtoIds() const;
   const dex::MapList* DexMapList() const;
 
+  static bool IsCompact(const void* image) {
+    const auto *header = reinterpret_cast<const struct Header*>(image);
+    if (header->magic[0] == 'd' && header->magic[1] == 'e' && header->magic[2] == 'x' && header->magic[3] == '\n') {
+      return false;
+    } else if (header->magic[0] == 'c' && header->magic[1] == 'd' && header->magic[2] == 'e' && header->magic[3] == 'x') {
+      return true;
+    }
+    return false;
+  }
+
   // IR creation interface
   std::shared_ptr<ir::DexFile> GetIr() const { return dex_ir_; }
   void CreateFullIr();
   void CreateClassIr(dex::u4 index);
   dex::u4 FindClassIndex(const char* class_descriptor) const;
 
+  // Convert a file pointer (absolute offset) to an in-memory pointer
+  template <class T>
+  const T* ptr(u4 offset) const {
+    SLICER_CHECK(offset >= 0 && offset + sizeof(T) <= size_);
+    return reinterpret_cast<const T*>(image_ + offset);
+  }
+
+  // Convert a data section file pointer (absolute offset) to an in-memory pointer
+  // (offset should be inside the data section)
+  template <class T>
+  const T* dataPtr(size_t offset) const {
+    SLICER_CHECK((is_compact_ || offset >= header_->data_off) && offset + sizeof(T) <= data_size_);
+    return reinterpret_cast<const T*>(data_ + offset);
+  }
  private:
   // Internal access to IR nodes for indexed .dex structures
   ir::Class* GetClass(dex::u4 index);
@@ -106,21 +129,6 @@ class Reader {
   ir::Code* ExtractCode(dex::u4 offset);
   void ParseInstructions(slicer::ArrayView<const dex::u2> code);
 
-  // Convert a file pointer (absolute offset) to an in-memory pointer
-  template <class T>
-  const T* ptr(int offset) const {
-    SLICER_CHECK(offset >= 0 && offset + sizeof(T) <= size_);
-    return reinterpret_cast<const T*>(image_ + offset);
-  }
-
-  // Convert a data section file pointer (absolute offset) to an in-memory pointer
-  // (offset should be inside the data section)
-  template <class T>
-  const T* dataPtr(size_t offset) const {
-    SLICER_CHECK(offset >= header_->data_off && offset + sizeof(T) <= size_);
-    return reinterpret_cast<const T*>(image_ + offset);
-  }
-
   // Map an indexed section to an ArrayView<T>
   template <class T>
   slicer::ArrayView<const T> section(int offset, int count) const {
@@ -138,13 +146,17 @@ class Reader {
  private:
   // the in-memory .dex image
   const dex::u1* image_;
-  size_t size_;
+  [[maybe_unused]] size_t size_;
+  const dex::u1* data_;
+  [[maybe_unused]] size_t data_size_;
 
   // .dex image header
   const dex::Header* header_;
 
   // .dex IR associated with the reader
   std::shared_ptr<ir::DexFile> dex_ir_;
+
+  bool is_compact_;
 
   // maps for de-duplicating items identified by file pointers
   std::map<dex::u4, ir::TypeList*> type_lists_;

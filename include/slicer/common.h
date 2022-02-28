@@ -21,7 +21,11 @@ namespace slicer {
 // Encapsulate the runtime check and error reporting policy.
 // (currently a simple fail-fast but the the intention is to allow customization)
 void _checkFailed(const char* expr, int line, const char* file) __attribute__((noreturn));
+#ifdef NDEBUG
+#define SLICER_CHECK(expr)
+#else
 #define SLICER_CHECK(expr) do { if(!(expr)) slicer::_checkFailed(#expr, __LINE__, __FILE__); } while(false)
+#endif
 
 // A modal check: if the strict mode is enabled, it behaves as a SLICER_CHECK,
 // otherwise it will only log a warning and continue
@@ -31,7 +35,11 @@ void _checkFailed(const char* expr, int line, const char* file) __attribute__((n
 //   problems and potentially ignoring them for parity with the Android runtime.
 //
 void _weakCheckFailed(const char* expr, int line, const char* file);
+#ifdef NDEBUG
+#define SLICER_WEAK_CHECK(expr)
+#else
 #define SLICER_WEAK_CHECK(expr) do { if(!(expr)) slicer::_weakCheckFailed(#expr, __LINE__, __FILE__); } while(false)
+#endif
 
 // Report a fatal condition with a printf-formatted message
 void _fatal(const char* format, ...) __attribute__((noreturn));
