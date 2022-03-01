@@ -698,6 +698,7 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
         if (class_name_iter == strs.cend() || *class_name_iter != class_name) continue;
         auto class_name_id = class_name_iter - strs.cbegin();
         auto class_id = type_cache_[dex_idx][class_name_id];
+        if (class_id == dex::kNoIndex) continue;
         auto candidates = method_cache_[dex_idx][class_id].find(method_name_id);
         if (candidates == method_cache_[dex_idx][class_id].end()) continue;
         for (const auto &method_id : candidates->second) {
@@ -739,6 +740,7 @@ size_t DexHelper::CreateClassIndex(std::string_view class_name, size_t on_dex) c
         if (class_name_iter == strs.cend() || *class_name_iter != class_name) continue;
         auto class_name_id = class_name_iter - strs.cbegin();
         auto class_id = type_cache_[dex_idx][class_name_id];
+        if (class_id == dex::kNoIndex) continue;
         if (auto idx = rev_class_indices_[dex_idx][class_id]; idx != size_t(-1)) return idx;
         class_ids[dex_idx] = class_id;
     }
