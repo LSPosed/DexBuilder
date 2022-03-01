@@ -125,7 +125,6 @@ private:
     std::vector<std::vector<std::string_view>> strings_;
     // method_codes[dex][method_id] -> code
     std::vector<std::vector<const dex::CodeItem *>> method_codes_;
-    std::vector<std::vector<const dex::TypeList *>> method_params_;
 
     // for cache
     // type_cache[dex][str_id] -> type_id

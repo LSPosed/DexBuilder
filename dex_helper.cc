@@ -1,7 +1,6 @@
 #include "dex_helper.h"
 
 #include <algorithm>
-#include <android/log.h>
 
 #include "slicer/dex_format.h"
 #include "slicer/dex_leb128.h"
@@ -34,7 +33,6 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
     rev_field_indices_.resize(dex_count);
     strings_.resize(dex_count);
     method_codes_.resize(dex_count);
-    method_params_.resize(dex_count);
     string_cache_.resize(dex_count);
     type_cache_.resize(dex_count);
     field_cache_.resize(dex_count);
@@ -55,7 +53,6 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
 
         strings_[dex_idx].reserve(dex.StringIds().size());
         method_codes_[dex_idx].resize(dex.MethodIds().size(), nullptr);
-        method_params_[dex_idx].resize(dex.MethodIds().size(), nullptr);
 
         type_cache_[dex_idx].resize(dex.StringIds().size(), dex::kNoIndex);
         field_cache_[dex_idx].resize(dex.TypeIds().size());
@@ -95,7 +92,6 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
             dex::u4 virtual_methods_count = dex::ReadULeb128(&class_data);
 
             auto &codes = method_codes_[dex_idx];
-            auto &params = method_params_[dex_idx];
             codes.resize(dex.MethodIds().size(), nullptr);
 
             for (dex::u4 i = 0; i < static_fields_count; ++i) {
@@ -115,11 +111,6 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
                 if (offset != 0) {
                     codes[method_idx] = dex.dataPtr<const dex::CodeItem>(offset);
                 }
-                auto parameters_offset =
-                    dex.ProtoIds()[dex.MethodIds()[method_idx].proto_idx].parameters_off;
-                if (parameters_offset) {
-                    params[method_idx] = dex.dataPtr<dex::TypeList>(parameters_offset);
-                }
             }
 
             for (dex::u4 i = 0, method_idx = 0; i < virtual_methods_count; ++i) {
@@ -128,11 +119,6 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
                 auto offset = dex::ReadULeb128(&class_data);
                 if (offset != 0) {
                     codes[method_idx] = dex.dataPtr<dex::CodeItem>(offset);
-                }
-                auto parameters_offset =
-                    dex.ProtoIds()[dex.MethodIds()[method_idx].proto_idx].parameters_off;
-                if (parameters_offset) {
-                    params[method_idx] = dex.dataPtr<dex::TypeList>(parameters_offset);
                 }
             }
         }
@@ -303,6 +289,12 @@ DexHelper::ConvertParameters(const std::vector<size_t> &parameter_types,
         for (const auto &param : parameter_types) {
             if (param != size_t(-1) && param >= class_indices_.size()) {
                 return {parameter_types_ids, contains_parameter_types_ids};
+            }
+            if (param == size_t(-1)) {
+                for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+                    parameter_types_ids[dex_idx].emplace_back(-2);
+                }
+                break;
             }
             auto &ids = class_indices_[param];
             for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
@@ -650,30 +642,33 @@ bool DexHelper::IsMethodMatch(size_t dex_id, uint32_t method_id, uint32_t return
     const auto &dex = readers_[dex_id];
     const auto &method = dex.MethodIds()[method_id];
     const auto &strs = strings_[dex_id];
-    const auto &params = method_params_[dex_id][method_id];
-    const size_t params_size = params ? params->size : 0;
     if (declaring_class != dex::kNoIndex && method.class_idx != declaring_class) return false;
     const auto &proto = dex.ProtoIds()[method.proto_idx];
     const auto &shorty = strs[proto.shorty_idx];
     if (return_type != dex::kNoIndex && proto.return_type_idx != return_type) return false;
     if (!parameter_shorty.empty() && shorty != parameter_shorty) return false;
-    if (parameter_count != -1 && params_size != parameter_count) return false;
-    if (!parameter_types.empty()) {
-        if (parameter_types.size() != params_size) return false;
-        for (size_t i = 0; i < params_size; ++i) {
-            if (parameter_types[i] != params->list[i].type_idx) return false;
-        }
-    }
-    if (!contains_parameter_types.empty()) {
-        for (const auto &type : contains_parameter_types) {
-            bool contains = false;
+    if (parameter_count != -1 || !parameter_types.empty() || !contains_parameter_types.empty()) {
+        auto param_off = dex.ProtoIds()[method.proto_idx].parameters_off;
+        const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
+        const size_t params_size = params ? params->size : 0;
+        if (parameter_count != -1 && params_size != parameter_count) return false;
+        if (!parameter_types.empty()) {
+            if (parameter_types.size() != params_size) return false;
             for (size_t i = 0; i < params_size; ++i) {
-                if (type == params->list[i].type_idx) {
-                    contains = true;
-                    break;
-                }
+                if (parameter_types[i] != uint32_t(-2) && parameter_types[i] != params->list[i].type_idx) return false;
             }
-            if (!contains) return false;
+        }
+        if (!contains_parameter_types.empty()) {
+            for (const auto &type : contains_parameter_types) {
+                bool contains = false;
+                for (size_t i = 0; i < params_size; ++i) {
+                    if (type == params->list[i].type_idx) {
+                        contains = true;
+                        break;
+                    }
+                }
+                if (!contains) return false;
+            }
         }
     }
     return true;
@@ -683,6 +678,7 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
                                     size_t on_dex) const {
     std::vector<uint32_t> method_ids;
     method_ids.resize(readers_.size(), dex::kNoIndex);
+    bool created = false;
     for (auto dex_idx = size_t(-1); dex_idx < readers_.size() || dex_idx == size_t(-1); ++dex_idx) {
         if (dex_idx == size_t(-1)) {
             dex_idx = on_dex;
@@ -703,7 +699,8 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
         if (candidates == method_cache_[dex_idx][class_id].end()) continue;
         for (const auto &method_id : candidates->second) {
             const auto &dex = readers_[dex_idx];
-            const auto &params = method_params_[dex_idx][method_id];
+            auto param_off = dex.ProtoIds()[dex.MethodIds()[method_id].proto_idx].parameters_off;
+            const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
             if (params && params->size != params_name.size()) continue;
             if (!params_name.empty() && !params) continue;
             for (size_t i = 0; i < params_name.size(); ++i) {
@@ -713,9 +710,11 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
                 }
             }
             if (auto idx = rev_method_indices_[dex_idx][method_id]; idx != size_t(-1)) return idx;
+            created = true;
             method_ids[dex_idx] = method_id;
         }
     }
+    if (!created) return -1;
     auto index = method_indices_.size();
     for (size_t dex_id = 0; dex_id < readers_.size(); ++dex_id) {
         auto method_id = method_ids[dex_id];
@@ -728,6 +727,7 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
 size_t DexHelper::CreateClassIndex(std::string_view class_name, size_t on_dex) const {
     std::vector<uint32_t> class_ids;
     class_ids.resize(readers_.size(), dex::kNoIndex);
+    bool created = false;
     for (auto dex_idx = size_t(-1); dex_idx < readers_.size() || dex_idx == size_t(-1); ++dex_idx) {
         if (dex_idx == size_t(-1)) {
             dex_idx = on_dex;
@@ -742,9 +742,10 @@ size_t DexHelper::CreateClassIndex(std::string_view class_name, size_t on_dex) c
         auto class_id = type_cache_[dex_idx][class_name_id];
         if (class_id == dex::kNoIndex) continue;
         if (auto idx = rev_class_indices_[dex_idx][class_id]; idx != size_t(-1)) return idx;
+        created = true;
         class_ids[dex_idx] = class_id;
     }
-
+    if (!created) return -1;
     auto index = class_indices_.size();
     for (size_t dex_id = 0; dex_id < readers_.size(); ++dex_id) {
         auto class_id = class_ids[dex_id];
@@ -759,6 +760,7 @@ size_t DexHelper::CreateFieldIndex(std::string_view class_name, std::string_view
     std::vector<uint32_t> field_ids;
     field_ids.resize(readers_.size(), dex::kNoIndex);
 
+    bool created = false;
     for (auto dex_idx = size_t(-1); dex_idx < readers_.size() || dex_idx == size_t(-1); ++dex_idx) {
         if (dex_idx == size_t(-1)) {
             dex_idx = on_dex;
@@ -779,9 +781,10 @@ size_t DexHelper::CreateFieldIndex(std::string_view class_name, std::string_view
         if (iter == field_cache_[dex_idx][class_id].end()) continue;
         auto field_id = iter->second;
         if (auto idx = rev_field_indices_[dex_idx][field_id]; idx != size_t(-1)) return idx;
+        created = true;
         field_ids[dex_idx] = field_id;
     }
-
+    if (!created) return -1;
     auto index = field_indices_.size();
     for (size_t dex_id = 0; dex_id < readers_.size(); ++dex_id) {
         auto field_id = field_ids[dex_id];
@@ -795,7 +798,8 @@ size_t DexHelper::CreateMethodIndex(size_t dex_idx, uint32_t method_id) const {
     const auto &dex = readers_[dex_idx];
     const auto &strs = strings_[dex_idx];
     const auto &method = dex.MethodIds()[method_id];
-    const auto &params = method_params_[dex_idx][method_id];
+    auto param_off = dex.ProtoIds()[dex.MethodIds()[method_id].proto_idx].parameters_off;
+    const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
     std::vector<std::string_view> param_names;
     if (params) {
         param_names.reserve(params->size);
@@ -865,7 +869,8 @@ auto DexHelper::DecodeMethod(size_t method_idx) const -> Method {
         const auto &method = dex.MethodIds()[method_id];
         const auto &strs = strings_[dex_idx];
         std::vector<Class> parameters;
-        const auto &params = method_params_[dex_idx][method_id];
+        auto param_off = dex.ProtoIds()[dex.MethodIds()[method_id].proto_idx].parameters_off;
+        const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
         size_t params_size = params ? params->size : 0;
         for (size_t i = 0; i < params_size; ++i) {
             parameters.emplace_back(Class{
