@@ -15,7 +15,9 @@ constexpr uint8_t opcode_len[] = {
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
     2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
     1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 4, 4, 3, 3, 2, 2};
+    2, 2, 2,
+    2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, // removed in Android 12
+    1, 1, 1, 1, 1, 1, 1, 4, 4, 3, 3, 2, 2};
 static_assert(sizeof(opcode_len) == 256);
 }  // namespace
 
@@ -227,15 +229,22 @@ bool DexHelper::ScanMethod(size_t dex_idx, uint32_t method_id, size_t str_lower,
     const dex::u2 *inst;
     const dex::u2 *end;
     if (dex.IsCompact()) {
+        auto insns_count_and_flags =  reinterpret_cast<const dex::CompactCode*>(code)->insns_count_and_flags;
         inst = reinterpret_cast<const dex::CompactCode*>(code)->insns;
-        end = inst + (reinterpret_cast<const dex::CompactCode*>(code)->insns_count_and_flags >> dex::CompactCode::kInsnsSizeShift);
+        dex::u4 insns_count = (insns_count_and_flags >> dex::CompactCode::kInsnsSizeShift);
+        if (insns_count_and_flags & dex::CompactCode::kFlagPreHeaderInsnsSize) {
+            const auto *preheader = reinterpret_cast<const uint16_t*>(code);
+            --preheader;
+            insns_count += static_cast<uint32_t>(*preheader);
+            --preheader;
+            insns_count += static_cast<uint32_t>(*preheader) << 16;
+        }
+        end = inst + insns_count;
     } else {
         inst = reinterpret_cast<const dex::Code*>(code)->insns;
         end = inst + reinterpret_cast<const dex::Code*>(code)->insns_size;
     }
-    size_t ins_count = 0;
     while (inst < end) {
-        ins_count++;
         dex::u1 opcode = *inst & kOpcodeMask;
         if (opcode == kOpcodeConstString) {
             auto str_idx = inst[1];

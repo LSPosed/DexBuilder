@@ -254,10 +254,13 @@ struct Code : CodeItem {
 };
 
 struct CompactCode : CodeItem {
+
   static constexpr size_t kInsnsSizeShift = 5;
-  uint16_t fields;
-  uint16_t insns_count_and_flags;
-  uint16_t insns[];
+  static constexpr u2 kBitPreHeaderInsnsSize = 4;
+  static constexpr u2 kFlagPreHeaderInsnsSize = 0x1 << kBitPreHeaderInsnsSize;
+  u2 fields;
+  u2 insns_count_and_flags;
+  u2 insns[];
 };
 
 // "try_item"
