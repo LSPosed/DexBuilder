@@ -345,8 +345,8 @@ std::vector<size_t> DexHelper::FindMethodUsingString(
         }
         const auto &codes = method_codes_[dex_idx];
         const auto &strs = string_cache_[dex_idx];
-        const auto return_type_id = return_type == size_t(-1) ? dex::kNoIndex : class_indices_[return_type][dex_idx];
-        const auto declaring_class_id = declaring_class == size_t(-1) ? dex::kNoIndex: class_indices_[declaring_class][dex_idx];
+        const auto return_type_id = return_type == size_t(-1) ? uint32_t(-2) : class_indices_[return_type][dex_idx];
+        const auto declaring_class_id = declaring_class == size_t(-1) ? uint32_t(-2): class_indices_[declaring_class][dex_idx];
 
         if (find_first) {
             for (auto s = lower; s < upper; ++s) {
@@ -413,8 +413,8 @@ std::vector<size_t> DexHelper::FindMethodInvoking(
     for (auto dex_idx : GetPriority(dex_priority)) {
         auto caller_id = method_ids[dex_idx];
         if (caller_id == dex::kNoIndex) continue;
-        const auto return_type_id = return_type == size_t(-1) ? dex::kNoIndex : class_indices_[return_type][dex_idx];
-        const auto declaring_class_id = declaring_class == size_t(-1) ? dex::kNoIndex: class_indices_[declaring_class][dex_idx];
+        const auto return_type_id = return_type == size_t(-1) ? uint32_t(-2) : class_indices_[return_type][dex_idx];
+        const auto declaring_class_id = declaring_class == size_t(-1) ? uint32_t(-2): class_indices_[declaring_class][dex_idx];
         ScanMethod(dex_idx, caller_id);
         for (auto callee : invoking_cache_[dex_idx][caller_id]) {
             if (IsMethodMatch(
@@ -451,8 +451,8 @@ std::vector<size_t> DexHelper::FindMethodInvoked(
         if (callee_id == dex::kNoIndex) continue;
         const auto &codes = method_codes_[dex_idx];
         const auto &cache = invoked_cache_[dex_idx][callee_id];
-        const auto return_type_id = return_type == size_t(-1) ? dex::kNoIndex : class_indices_[return_type][dex_idx];
-        const auto declaring_class_id = declaring_class == size_t(-1) ? dex::kNoIndex: class_indices_[declaring_class][dex_idx];
+        const auto return_type_id = return_type == size_t(-1) ? uint32_t(-2) : class_indices_[return_type][dex_idx];
+        const auto declaring_class_id = declaring_class == size_t(-1) ? uint32_t(-2): class_indices_[declaring_class][dex_idx];
         if (find_first && !cache.empty()) {
             for(const auto &caller : cache) {
                 if (IsMethodMatch(dex_idx, caller,
@@ -512,8 +512,8 @@ std::vector<size_t> DexHelper::FindMethodGettingField(
         if (field_id == dex::kNoIndex) continue;
         const auto &codes = method_codes_[dex_idx];
         const auto &cache = getting_cache_[dex_idx][field_id];
-        const auto return_type_id = return_type == size_t(-1) ? dex::kNoIndex : class_indices_[return_type][dex_idx];
-        const auto declaring_class_id = declaring_class == size_t(-1) ? dex::kNoIndex: class_indices_[declaring_class][dex_idx];
+        const auto return_type_id = return_type == size_t(-1) ? uint32_t(-2) : class_indices_[return_type][dex_idx];
+        const auto declaring_class_id = declaring_class == size_t(-1) ? uint32_t(-2): class_indices_[declaring_class][dex_idx];
         if (find_first && !cache.empty()) {
             for (const auto &getter : cache) {
                 if (IsMethodMatch(dex_idx, getter,
@@ -573,8 +573,8 @@ std::vector<size_t> DexHelper::FindMethodSettingField(
         if (field_id == dex::kNoIndex) continue;
         const auto &codes = method_codes_[dex_idx];
         const auto &cache = setting_cache_[dex_idx][field_id];
-        const auto return_type_id = return_type == size_t(-1) ? dex::kNoIndex : class_indices_[return_type][dex_idx];
-        const auto declaring_class_id = declaring_class == size_t(-1) ? dex::kNoIndex: class_indices_[declaring_class][dex_idx];
+        const auto return_type_id = return_type == size_t(-1) ? uint32_t(-2) : class_indices_[return_type][dex_idx];
+        const auto declaring_class_id = declaring_class == size_t(-1) ? uint32_t(-2): class_indices_[declaring_class][dex_idx];
         if (find_first && !cache.empty()) {
             for (const auto &setter : cache) {
                 if (IsMethodMatch(dex_idx, setter,
@@ -593,10 +593,10 @@ std::vector<size_t> DexHelper::FindMethodSettingField(
             if (scanned[method_id]) continue;
             if (IsMethodMatch(
                     dex_idx, method_id,
-                    return_type == size_t(-1) ? dex::kNoIndex
+                    return_type == size_t(-1) ? uint32_t(-2)
                                               : class_indices_[return_type][dex_idx],
                     parameter_count, parameter_shorty,
-                    declaring_class == size_t(-1) ? dex::kNoIndex
+                    declaring_class == size_t(-1) ? uint32_t(-2)
                                                   : class_indices_[declaring_class][dex_idx],
                     parameter_types_ids[dex_idx], contains_parameter_types_ids[dex_idx])) {
                 ScanMethod(dex_idx, method_id);
@@ -642,10 +642,10 @@ bool DexHelper::IsMethodMatch(size_t dex_id, uint32_t method_id, uint32_t return
     const auto &dex = readers_[dex_id];
     const auto &method = dex.MethodIds()[method_id];
     const auto &strs = strings_[dex_id];
-    if (declaring_class != dex::kNoIndex && method.class_idx != declaring_class) return false;
+    if (declaring_class != uint32_t(-2) && method.class_idx != declaring_class) return false;
     const auto &proto = dex.ProtoIds()[method.proto_idx];
     const auto &shorty = strs[proto.shorty_idx];
-    if (return_type != dex::kNoIndex && proto.return_type_idx != return_type) return false;
+    if (return_type != uint32_t(-2) && proto.return_type_idx != return_type) return false;
     if (!parameter_shorty.empty() && shorty != parameter_shorty) return false;
     if (parameter_count != -1 || !parameter_types.empty() || !contains_parameter_types.empty()) {
         auto param_off = dex.ProtoIds()[method.proto_idx].parameters_off;
