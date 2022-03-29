@@ -895,7 +895,7 @@ private:
   std::vector<std::unique_ptr<uint8_t[]>> string_data_;
 
   // Keep track of what types we've defined so we can look them up later.
-  std::unordered_map<std::string, ir::Type *> types_by_descriptor_;
+  std::unordered_map<std::string_view, ir::Type *> types_by_descriptor_;
 
   struct MethodDescriptor {
     TypeDescriptor type;
@@ -914,7 +914,7 @@ private:
   std::map<MethodDescriptor, MethodDeclData> method_id_map_;
 
   // Keep track of what strings we've defined so we can look them up later.
-  std::unordered_map<std::string, ir::String *> strings_;
+  std::unordered_map<std::string_view, ir::String *> strings_;
 
   // Keep track of already-encoded protos.
   std::map<Prototype, ir::Proto *> proto_map_;

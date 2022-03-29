@@ -225,9 +225,8 @@ slicer::MemView DexBuilder::CreateImage() {
 }
 
 ir::String *DexBuilder::GetOrAddString(const std::string &string) {
-  ir::String *&entry = strings_[string];
-
-  if (entry == nullptr) {
+  auto it = strings_.find(string);
+  if (it == strings_.end()) {
     // Need to encode the length and then write out the bytes, including 1 byte
     // for null terminator
     auto buffer = std::make_unique<uint8_t[]>(string.size() +
@@ -244,16 +243,17 @@ ir::String *DexBuilder::GetOrAddString(const std::string &string) {
     auto end = std::copy(string.begin(), string.end(), string_data_start);
     *end = '\0';
 
-    entry = Alloc<ir::String>();
+    auto* entry = Alloc<ir::String>();
     // +1 for null terminator
     entry->data =
         slicer::MemView{buffer.get(), header_length + string.size() + 1};
+    it = strings_.emplace(entry->c_str(), entry).first;
     ::dex::u4 const new_index = dex_file_->strings_indexes.AllocateIndex();
     dex_file_->strings_map[new_index] = entry;
     entry->orig_index = new_index;
     string_data_.push_back(std::move(buffer));
   }
-  return entry;
+  return it->second;
 }
 
 ClassBuilder DexBuilder::MakeClass(const std::string &name) {
@@ -275,7 +275,7 @@ ir::Type *DexBuilder::GetOrAddType(const std::string &descriptor) {
 
   ir::Type *type = Alloc<ir::Type>();
   type->descriptor = GetOrAddString(descriptor);
-  types_by_descriptor_[descriptor] = type;
+  types_by_descriptor_[type->descriptor->c_str()] = type;
   type->orig_index = dex_file_->types_indexes.AllocateIndex();
   dex_file_->types_map[type->orig_index] = type;
   return type;
