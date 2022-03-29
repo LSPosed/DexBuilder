@@ -423,10 +423,15 @@ dex::u4 Writer::CreateMapSection(dex::u4 section_offset) {
   AddMapItem(dex_->ann_items, map_items);
   AddMapItem(dex_->map_list, map_items);
 
-  std::sort(map_items.begin(), map_items.end(),
-            [](const dex::MapItem& a, const dex::MapItem& b) {
-              SLICER_CHECK(a.offset != b.offset);
-              return a.offset < b.offset;
+  std::qsort(&map_items[0], map_items.size(), sizeof(map_items[0]),
+            +[](const void* a, const void* b) -> int {
+              const auto* i = static_cast<const dex::MapItem*>(a);
+              const auto* j = static_cast<const dex::MapItem*>(b);
+              SLICER_CHECK(i->offset != j->offset);
+              if (i->offset < j->offset) {
+                return -1;
+              }
+              return 1;
             });
 
   section.Push<dex::u4>(map_items.size());
