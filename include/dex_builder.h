@@ -1009,7 +1009,7 @@ inline void MethodBuilder::EncodeInstructions() {
 namespace std {
 template <> struct hash<startop::dex::TypeDescriptor> {
   std::size_t operator()(const startop::dex::TypeDescriptor &s) const {
-    return std::hash<std::string>{}(s.descriptor_);
+    return std::hash<std::string_view>{}(s.descriptor_);
   }
 };
 } // namespace std
