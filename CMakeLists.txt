@@ -20,6 +20,7 @@ set(DB_SOURCES
         slicer/dex_format.cc
         slicer/dex_utf8.cc
         slicer/dex_bytecode.cc
+        slicer/sha1.cpp
         )
 
 set(TEST_SOURCES
