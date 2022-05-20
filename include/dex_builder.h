@@ -851,7 +851,7 @@ public:
 
   // Create an in-memory image of the DEX file that can either be loaded
   // directly or written to a file.
-  slicer::MemView CreateImage();
+  slicer::MemView CreateImage(bool checksum=false);
 
   template <typename T> T *Alloc() { return dex_file_->Alloc<T>(); }
 

@@ -243,7 +243,7 @@ static void WriteU4(u2* ptr, u4 val) {
 
 // This is the main interface for the .dex writer
 // (returns nullptr on failure)
-dex::u1* Writer::CreateImage(Allocator* allocator, size_t* new_image_size) {
+dex::u1* Writer::CreateImage(Allocator* allocator, size_t* new_image_size, bool checksum) {
   // create a new DexImage
   dex_.reset(new DexImage);
 
@@ -353,13 +353,16 @@ dex::u1* Writer::CreateImage(Allocator* allocator, size_t* new_image_size) {
   CopySection(dex_->ann_items, image, image_size);
   CopySection(dex_->map_list, image, image_size);
 
-  // checksum
-  SHA1_CTX ctx;
-  SHA1Init(&ctx);
-  const u1* start = reinterpret_cast<const u1*>(header);
-  const uint32_t no_sum = sizeof(header->magic) + sizeof(header->checksum) + sizeof(header->signature);
-  SHA1Update(&ctx, reinterpret_cast<const unsigned char *>(header) + no_sum, header->file_size - no_sum);
-  SHA1Final(header->signature, &ctx);
+  if (checksum) {
+    // checksum
+    SHA1_CTX ctx;
+    SHA1Init(&ctx);
+    const uint32_t no_sum =
+            sizeof(header->magic) + sizeof(header->checksum) + sizeof(header->signature);
+    SHA1Update(&ctx, reinterpret_cast<const unsigned char *>(header) + no_sum,
+               header->file_size - no_sum);
+    SHA1Final(header->signature, &ctx);
+  }
   header->checksum = dex::ComputeChecksum(header);
 
   *new_image_size = image_size;

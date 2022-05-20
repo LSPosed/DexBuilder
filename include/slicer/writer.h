@@ -183,7 +183,7 @@ class Writer {
   Writer& operator=(const Writer&) = delete;
 
   // .dex image creation
-  dex::u1* CreateImage(Allocator* allocator, size_t* new_image_size);
+  dex::u1* CreateImage(Allocator* allocator, size_t* new_image_size, bool checksum=false);
 
  private:
   // helpers for creating various .dex sections

@@ -217,10 +217,10 @@ DexBuilder::DexBuilder() : dex_file_{std::make_shared<ir::DexFile>()} {
   dex_file_->magic = slicer::MemView{kDexFileMagic, sizeof(kDexFileMagic)};
 }
 
-slicer::MemView DexBuilder::CreateImage() {
+slicer::MemView DexBuilder::CreateImage(bool checksum) {
   ::dex::Writer writer(dex_file_);
   size_t image_size{0};
-  ::dex::u1 *image = writer.CreateImage(&allocator_, &image_size);
+  ::dex::u1 *image = writer.CreateImage(&allocator_, &image_size, checksum);
   return slicer::MemView{image, image_size};
 }
 
