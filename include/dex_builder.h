@@ -39,7 +39,7 @@
 #include <map>
 #include <optional>
 #include <string>
-#include <unordered_map>
+#include <absl/container/flat_hash_map.h>
 #include <vector>
 
 #include "slicer/dex_bytecode.h"
@@ -66,7 +66,7 @@ public:
   virtual void Free(void *ptr);
 
 private:
-  std::unordered_map<void *, std::unique_ptr<uint8_t[]>> allocations_;
+  absl::flat_hash_map<void *, std::unique_ptr<uint8_t[]>> allocations_;
 };
 
 // Represents a DEX type descriptor.
@@ -135,7 +135,7 @@ public:
   friend struct std::hash<TypeDescriptor>;
 
 private:
-  static const std::unordered_map<TypeDescriptor, TypeDescriptor> unbox_map;
+  static const absl::flat_hash_map<TypeDescriptor, TypeDescriptor> unbox_map;
 
   explicit TypeDescriptor(std::string descriptor, bool wide = false)
       : descriptor_{descriptor}, wide_(wide) {}
@@ -572,7 +572,7 @@ public:
   const TypeDescriptor &descriptor() const { return type_descriptor_; }
 
 private:
-  static const std::unordered_map<TypeDescriptor, std::string> value_method_map;
+  static const absl::flat_hash_map<TypeDescriptor, std::string> value_method_map;
 
   DexBuilder *const parent_;
   const TypeDescriptor type_descriptor_;
@@ -895,7 +895,7 @@ private:
   std::vector<std::unique_ptr<uint8_t[]>> string_data_;
 
   // Keep track of what types we've defined so we can look them up later.
-  std::unordered_map<std::string_view, ir::Type *> types_by_descriptor_;
+  absl::flat_hash_map<std::string_view, ir::Type *> types_by_descriptor_;
 
   struct MethodDescriptor {
     TypeDescriptor type;
@@ -914,7 +914,7 @@ private:
   std::map<MethodDescriptor, MethodDeclData> method_id_map_;
 
   // Keep track of what strings we've defined so we can look them up later.
-  std::unordered_map<std::string_view, ir::String *> strings_;
+  absl::flat_hash_map<std::string_view, ir::String *> strings_;
 
   // Keep track of already-encoded protos.
   std::map<Prototype, ir::Proto *> proto_map_;
