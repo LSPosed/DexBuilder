@@ -27,29 +27,34 @@ set(TEST_SOURCES
         dex_testcase_generator.cc
         )
 
-add_library(${PROJECT_NAME} SHARED ${DB_SOURCES})
-add_library(${PROJECT_NAME}_static STATIC ${DB_SOURCES})
-
-target_include_directories(${PROJECT_NAME} PUBLIC include)
-target_include_directories(${PROJECT_NAME}_static PUBLIC include)
-
-target_link_libraries(${PROJECT_NAME} PUBLIC z log)
-target_link_libraries(${PROJECT_NAME}_static PUBLIC z log)
-
-if (NOT DEFINED DEBUG_SYMBOLS_PATH)
-    set(DEBUG_SYMBOLS_PATH ${CMAKE_BINARY_DIR}/symbols)
-endif()
-
-add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E make_directory ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}
-        COMMAND ${CMAKE_OBJCOPY} --only-keep-debug $<TARGET_FILE:${PROJECT_NAME}>
-        ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}/${PROJECT_NAME}
-        COMMAND ${CMAKE_STRIP} --strip-all $<TARGET_FILE:${PROJECT_NAME}>)
-
 set(CFLAGS
         -flto
         -fvisibility=default
         )
 
-target_compile_options(${PROJECT_NAME} PRIVATE ${CFLAGS})
-target_link_options(${PROJECT_NAME} PRIVATE -flto)
+add_subdirectory(external/abseil)
+
+option(DEX_BUILDER_BUILD_SHARED "If ON, dex builder will also build shared library" ON)
+if (DEX_BUILDER_BUILD_SHARED)
+    message(STATUS "Building dex builder as shared library")
+    add_library(${PROJECT_NAME} SHARED ${DB_SOURCES})
+    target_include_directories(${PROJECT_NAME} PUBLIC include)
+    target_link_libraries(${PROJECT_NAME} PUBLIC z log absl::flat_hash_map)
+
+    add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}
+            COMMAND ${CMAKE_OBJCOPY} --only-keep-debug $<TARGET_FILE:${PROJECT_NAME}>
+            ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}/${PROJECT_NAME}
+            COMMAND ${CMAKE_STRIP} --strip-all $<TARGET_FILE:${PROJECT_NAME}>)
+
+    target_compile_options(${PROJECT_NAME} PRIVATE ${CFLAGS})
+    target_link_options(${PROJECT_NAME} PRIVATE -flto)
+endif()
+
+add_library(${PROJECT_NAME}_static STATIC ${DB_SOURCES})
+target_include_directories(${PROJECT_NAME}_static PUBLIC include)
+target_link_libraries(${PROJECT_NAME}_static PUBLIC z log absl::flat_hash_map)
+
+if (NOT DEFINED DEBUG_SYMBOLS_PATH)
+    set(DEBUG_SYMBOLS_PATH ${CMAKE_BINARY_DIR}/symbols)
+endif()
