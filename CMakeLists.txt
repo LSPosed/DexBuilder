@@ -32,6 +32,7 @@ set(CFLAGS
         -fvisibility=default
         )
 
+set(ABSL_PROPAGATE_CXX_STD ON)
 add_subdirectory(external/abseil)
 
 option(DEX_BUILDER_BUILD_SHARED "If ON, dex builder will also build shared library" ON)
