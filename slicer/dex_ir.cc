@@ -190,6 +190,7 @@ std::string Proto::Signature() const {
 template<typename RandomIt>
 inline void QuickSortPointer(RandomIt first, RandomIt last) {
   using ValueType = typename std::iterator_traits<RandomIt>::value_type;
+  if (first == last) return;
   std::qsort(&*first, last - first, sizeof(ValueType),
              +[](const void* a, const void* b) -> int {
                  auto i = static_cast<const ValueType*>(a);
