@@ -223,6 +223,7 @@ class Writer {
   dex::u4 MapTypeIndex(dex::u4 index) const;
   dex::u4 MapFieldIndex(dex::u4 index) const;
   dex::u4 MapMethodIndex(dex::u4 index) const;
+  dex::u4 MapProtoIndex(dex::u4 index) const;
 
   // writing parts of a class definition
   void WriteInstructions(slicer::ArrayView<const dex::u2> instructions);

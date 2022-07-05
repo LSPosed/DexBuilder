@@ -846,6 +846,7 @@ void Writer::WriteInstructions(slicer::ArrayView<const dex::u2> instructions) {
   while (ptr < end) {
     auto opcode = dex::OpcodeFromBytecode(*ptr);
     dex::u2* idx = &ptr[1];
+    dex::u2* idx2 = nullptr;
 
     size_t idx_size = 0;
     switch (dex::GetFormatFromOpcode(opcode)) {
@@ -859,6 +860,12 @@ void Writer::WriteInstructions(slicer::ArrayView<const dex::u2> instructions) {
 
       case dex::k31c:
         idx_size = 4;
+        break;
+
+      case dex::k45cc:
+      case dex::k4rcc:
+        idx_size = 2;
+        idx2 = &ptr[3];
         break;
 
       default:
@@ -902,6 +909,18 @@ void Writer::WriteInstructions(slicer::ArrayView<const dex::u2> instructions) {
         SLICER_CHECK(new_index != dex::kNoIndex);
         SLICER_CHECK(dex::u2(new_index) == new_index);
         *idx = dex::u2(new_index);
+      } break;
+
+      case dex::kIndexMethodAndProtoRef: {
+        SLICER_CHECK(idx_size == 2);
+        dex::u4 new_index = MapMethodIndex(*idx);
+        SLICER_CHECK(new_index != dex::kNoIndex);
+        SLICER_CHECK(dex::u2(new_index) == new_index);
+        *idx = dex::u2(new_index);
+        dex::u4 new_index2 = MapProtoIndex(*idx2);
+        SLICER_CHECK(new_index2 != dex::kNoIndex);
+        SLICER_CHECK(dex::u2(new_index2) == new_index2);
+        *idx2 = dex::u2(new_index2);
       } break;
 
       default:
@@ -1111,6 +1130,15 @@ dex::u4 Writer::MapFieldIndex(dex::u4 index) const {
 dex::u4 Writer::MapMethodIndex(dex::u4 index) const {
   if (index != dex::kNoIndex) {
     index = dex_ir_->methods_map.at(index)->index;
+    SLICER_CHECK(index != dex::kNoIndex);
+  }
+  return index;
+}
+
+// Map an index from the original .dex to the new index
+dex::u4 Writer::MapProtoIndex(dex::u4 index) const {
+  if (index != dex::kNoIndex) {
+    index = dex_ir_->protos_map.at(index)->index;
     SLICER_CHECK(index != dex::kNoIndex);
   }
   return index;
