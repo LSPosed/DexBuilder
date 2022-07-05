@@ -109,12 +109,12 @@ dex::u4 Reader::FindClassIndex(const char* class_descriptor) const {
 // map a .dex index to corresponding .dex IR node
 //
 // NOTES:
-//  1. the mapping beween an index and the indexed
+//  1. the mapping between an index and the indexed
 //     .dex IR nodes is 1:1
 //  2. we do a single index lookup for both existing
 //     nodes as well as new nodes
 //  3. placeholder is an invalid, but non-null pointer value
-//     used to check that the mapping loookup/update is atomic
+//     used to check that the mapping lookup/update is atomic
 //  4. there should be no recursion with the same index
 //     (we use the placeholder value to guard against this too)
 //
@@ -881,6 +881,7 @@ void Reader::ParseInstructions(slicer::ArrayView<const dex::u2> code) {
     auto dex_instr = dex::DecodeInstruction(ptr);
 
     dex::u4 index = dex::kNoIndex;
+    dex::u4 index2 = dex::kNoIndex;
     switch (dex::GetFormatFromOpcode(dex_instr.opcode)) {
       case dex::k20bc:
       case dex::k21c:
@@ -888,6 +889,12 @@ void Reader::ParseInstructions(slicer::ArrayView<const dex::u2> code) {
       case dex::k35c:
       case dex::k3rc:
         index = dex_instr.vB;
+        break;
+
+      case dex::k45cc:
+      case dex::k4rcc:
+        index = dex_instr.vB;
+        index2 = dex_instr.arg[4];
         break;
 
       case dex::k22c:
@@ -913,6 +920,11 @@ void Reader::ParseInstructions(slicer::ArrayView<const dex::u2> code) {
 
       case dex::kIndexMethodRef:
         GetMethodDecl(index);
+        break;
+
+      case dex::kIndexMethodAndProtoRef:
+        GetMethodDecl(index);
+        GetProto(index2);
         break;
 
       default:
@@ -945,7 +957,7 @@ void Reader::ValidateHeader() {
   SLICER_CHECK(header_->endian_tag == dex::kEndianConstant);
   SLICER_CHECK(header_->data_size % 4 == 0);
 
-  // Known issue: The fields might be slighly corrupted b/65452964
+  // Known issue: The fields might be slightly corrupted b/65452964
   // SLICER_CHECK(header_->data_off + header_->data_size <= size_);
 
   SLICER_CHECK(header_->string_ids_off % 4 == 0);
@@ -971,7 +983,7 @@ void Reader::ValidateHeader() {
 
   // but we should still have the whole data section
 
-  // Known issue: The fields might be slighly corrupted b/65452964
+  // Known issue: The fields might be slightly corrupted b/65452964
   // Known issue: For performance reasons the initial size_ passed to jvmti events might be an
   // estimate. b/72402467
   // SLICER_CHECK(header_->data_off + header_->data_size <= size_);
