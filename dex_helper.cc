@@ -74,8 +74,8 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
         auto &strs = strings_[dex_idx];
         for (const auto &str : dex.StringIds()) {
             const auto *ptr = dex.dataPtr<dex::u1>(str.string_data_off);
-            size_t len = dex::ReadULeb128(&ptr);
-            strs.emplace_back(reinterpret_cast<const char *>(ptr), len);
+            dex::ReadULeb128(&ptr);
+            strs.emplace_back(reinterpret_cast<const char *>(ptr));
         }
     }
 
