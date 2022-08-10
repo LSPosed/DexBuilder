@@ -646,7 +646,7 @@ bool DexHelper::IsMethodMatch(size_t dex_id, uint32_t method_id, uint32_t return
     const auto &proto = dex.ProtoIds()[method.proto_idx];
     const auto &shorty = strs[proto.shorty_idx];
     if (return_type != uint32_t(-2) && proto.return_type_idx != return_type) return false;
-    if (!parameter_shorty.empty() && shorty != parameter_shorty) return false;
+    if (!parameter_shorty.empty() && shorty.substr(1) != parameter_shorty) return false;
     if (parameter_count != -1 || !parameter_types.empty() || !contains_parameter_types.empty()) {
         auto param_off = dex.ProtoIds()[method.proto_idx].parameters_off;
         const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
