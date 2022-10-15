@@ -5,6 +5,7 @@
 #include "slicer/dex_format.h"
 #include "slicer/dex_leb128.h"
 #include "slicer/reader.h"
+#include "slicer/dex_utf8.h"
 
 namespace {
 constexpr uint8_t opcode_len[] = {
@@ -19,13 +20,14 @@ constexpr uint8_t opcode_len[] = {
     2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, // removed in Android 12
     1, 1, 1, 1, 1, 1, 1, 4, 4, 3, 3, 2, 2};
 static_assert(sizeof(opcode_len) == 256);
+constexpr auto utf8_less = [](const std::string_view a, const std::string_view b) { return dex::Utf8Cmp(a.data(), b.data()) < 0; };
 }  // namespace
 
 DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const void *, size_t>> &dexs) {
     for (const auto &[image, size, data, data_size] : dexs) {
         readers_.emplace_back(static_cast<const dex::u1 *>(image), size, static_cast<const dex::u1 *>(data), data_size);
     }
-    size_t dex_count = readers_.size();
+    auto dex_count = readers_.size();
 
     // init
     rev_method_indices_.resize(dex_count);
@@ -45,7 +47,7 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
     declaring_cache_.resize(dex_count);
     searched_methods_.resize(dex_count);
 
-    for (size_t dex_idx = 0; dex_idx < dex_count; ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < dex_count; ++dex_idx) {
         auto &dex = readers_[dex_idx];
         rev_method_indices_[dex_idx].resize(dex.MethodIds().size(), size_t(-1));
         rev_class_indices_[dex_idx].resize(dex.TypeIds().size(), size_t(-1));
@@ -69,7 +71,7 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
         searched_methods_[dex_idx].resize(dex.MethodIds().size());
     }
 
-    for (size_t dex_idx = 0; dex_idx < dex_count; ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < dex_count; ++dex_idx) {
         auto &dex = readers_[dex_idx];
         auto &strs = strings_[dex_idx];
         for (const auto &str : dex.StringIds()) {
@@ -79,9 +81,9 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
         }
     }
 
-    for (size_t dex_idx = 0; dex_idx < dex_count; ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < dex_count; ++dex_idx) {
         auto &dex = readers_[dex_idx];
-        for (size_t class_idx = 0; class_idx < dex.ClassDefs().size(); ++class_idx) {
+        for (auto class_idx = 0zu; class_idx < dex.ClassDefs().size(); ++class_idx) {
             const auto &class_def = dex.ClassDefs()[class_idx];
             class_cache_[dex_idx][class_def.class_idx] = class_idx;
             if (class_def.class_data_off == 0) continue;
@@ -123,21 +125,21 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
             }
         }
     }
-    for (size_t dex_idx = 0; dex_idx < dex_count; ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < dex_count; ++dex_idx) {
         auto &dex = readers_[dex_idx];
         auto &type = type_cache_[dex_idx];
         auto &field = field_cache_[dex_idx];
         auto &declare = declaring_cache_[dex_idx];
         auto &method = method_cache_[dex_idx];
-        for (size_t type_idx = 0; type_idx < dex.TypeIds().size(); ++type_idx) {
+        for (auto type_idx = 0zu; type_idx < dex.TypeIds().size(); ++type_idx) {
             type[dex.TypeIds()[type_idx].descriptor_idx] = type_idx;
         }
-        for (size_t field_idx = 0; field_idx < dex.FieldIds().size(); ++field_idx) {
+        for (auto field_idx = 0zu; field_idx < dex.FieldIds().size(); ++field_idx) {
             auto f = dex.FieldIds()[field_idx];
             field[f.class_idx][f.name_idx] = field_idx;
             declare[f.type_idx].emplace_back(field_idx);
         }
-        for (size_t method_idx = 0; method_idx < dex.MethodIds().size(); ++method_idx) {
+        for (auto method_idx = 0zu; method_idx < dex.MethodIds().size(); ++method_idx) {
             auto m = dex.MethodIds()[method_idx];
             method[m.class_idx][m.name_idx].emplace_back(method_idx);
         }
@@ -147,9 +149,9 @@ DexHelper::DexHelper(const std::vector<std::tuple<const void *, size_t, const vo
 std::tuple<uint32_t, uint32_t> DexHelper::FindPrefixStringId(size_t dex_idx,
                                                              std::string_view to_find) const {
     const auto &strs = strings_[dex_idx];
-    if (auto str_lower_bound = std::lower_bound(strs.cbegin(), strs.cend(), to_find),
+    if (auto str_lower_bound = std::lower_bound(strs.cbegin(), strs.cend(), to_find, utf8_less),
         str_upper_bound =
-            std::upper_bound(strs.cbegin(), strs.cend(), std::string(to_find) + '\xff');
+            std::upper_bound(strs.cbegin(), strs.cend(), std::string(to_find) + '\xff', utf8_less);
         str_upper_bound != strs.cend() && str_lower_bound != strs.cend() &&
         str_lower_bound <= str_upper_bound) {
         return {str_lower_bound - strs.cbegin(), str_upper_bound - strs.cbegin()};
@@ -159,7 +161,7 @@ std::tuple<uint32_t, uint32_t> DexHelper::FindPrefixStringId(size_t dex_idx,
 
 uint32_t DexHelper::FindPrefixStringIdExact(size_t dex_idx, std::string_view to_find) const {
     const auto &strs = strings_[dex_idx];
-    auto first = std::lower_bound(strs.cbegin(), strs.cend(), to_find);
+    auto first = std::lower_bound(strs.cbegin(), strs.cend(), to_find, utf8_less);
     if (first != strs.cend() && *first == to_find) {
         return first - strs.cbegin();
     }
@@ -167,9 +169,9 @@ uint32_t DexHelper::FindPrefixStringIdExact(size_t dex_idx, std::string_view to_
 }
 
 void DexHelper::CreateFullCache() const {
-    for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         const auto &codes = method_codes_[dex_idx];
-        for (size_t method_id = 0; method_id < codes.size(); ++method_id) {
+        for (auto method_id = 0zu; method_id < codes.size(); ++method_id) {
             ScanMethod(dex_idx, method_id);
         }
     }
@@ -283,7 +285,7 @@ DexHelper::ConvertParameters(const std::vector<size_t> &parameter_types,
     std::vector<std::vector<uint32_t>> parameter_types_ids(readers_.size());
     std::vector<std::vector<uint32_t>> contains_parameter_types_ids(readers_.size());
     if (!parameter_types.empty()) {
-        for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+        for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
             parameter_types_ids[dex_idx].reserve(parameter_types.size());
         }
         for (const auto &param : parameter_types) {
@@ -291,20 +293,20 @@ DexHelper::ConvertParameters(const std::vector<size_t> &parameter_types,
                 return {parameter_types_ids, contains_parameter_types_ids};
             }
             if (param == size_t(-1)) {
-                for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+                for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
                     parameter_types_ids[dex_idx].emplace_back(-2);
                 }
                 break;
             }
             auto &ids = class_indices_[param];
-            for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+            for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
                 parameter_types_ids[dex_idx].emplace_back(ids[dex_idx]);
             }
         }
     }
 
     if (!contains_parameter_types.empty()) {
-        for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+        for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
             contains_parameter_types_ids[dex_idx].reserve(contains_parameter_types.size());
         }
         for (const auto &param : contains_parameter_types) {
@@ -312,7 +314,7 @@ DexHelper::ConvertParameters(const std::vector<size_t> &parameter_types,
                 return {parameter_types_ids, contains_parameter_types_ids};
             }
             auto &ids = class_indices_[param];
-            for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+            for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
                 contains_parameter_types_ids[dex_idx].emplace_back(ids[dex_idx]);
             }
         }
@@ -364,7 +366,7 @@ std::vector<size_t> DexHelper::FindMethodUsingString(
             }
         }
 
-        for (size_t method_id = 0; method_id < codes.size(); ++method_id) {
+        for (auto method_id = 0zu; method_id < codes.size(); ++method_id) {
             auto &scanned = searched_methods_[dex_idx];
             if (scanned[method_id]) continue;
             if (IsMethodMatch(
@@ -466,7 +468,7 @@ std::vector<size_t> DexHelper::FindMethodInvoked(
                 }
             }
         }
-        for (size_t method_id = 0; method_id < codes.size(); ++method_id) {
+        for (auto method_id = 0zu; method_id < codes.size(); ++method_id) {
             auto &scanned = searched_methods_[dex_idx];
             if (scanned[method_id]) continue;
             if (IsMethodMatch(
@@ -527,7 +529,7 @@ std::vector<size_t> DexHelper::FindMethodGettingField(
                 }
             }
         }
-        for (size_t method_id = 0; method_id < codes.size(); ++method_id) {
+        for (auto method_id = 0zu; method_id < codes.size(); ++method_id) {
             auto &scanned = searched_methods_[dex_idx];
             if (scanned[method_id]) continue;
             if (IsMethodMatch(
@@ -588,7 +590,7 @@ std::vector<size_t> DexHelper::FindMethodSettingField(
                 }
             }
         }
-        for (size_t method_id = 0; method_id < codes.size(); ++method_id) {
+        for (auto method_id = 0zu; method_id < codes.size(); ++method_id) {
             auto &scanned = searched_methods_[dex_idx];
             if (scanned[method_id]) continue;
             if (IsMethodMatch(
@@ -650,18 +652,18 @@ bool DexHelper::IsMethodMatch(size_t dex_id, uint32_t method_id, uint32_t return
     if (parameter_count != -1 || !parameter_types.empty() || !contains_parameter_types.empty()) {
         auto param_off = dex.ProtoIds()[method.proto_idx].parameters_off;
         const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
-        const size_t params_size = params ? params->size : 0;
+        const auto params_size = params ? params->size : 0zu;
         if (parameter_count != -1 && params_size != parameter_count) return false;
         if (!parameter_types.empty()) {
             if (parameter_types.size() != params_size) return false;
-            for (size_t i = 0; i < params_size; ++i) {
+            for (auto i = 0zu; i < params_size; ++i) {
                 if (parameter_types[i] != uint32_t(-2) && parameter_types[i] != params->list[i].type_idx) return false;
             }
         }
         if (!contains_parameter_types.empty()) {
             for (const auto &type : contains_parameter_types) {
                 bool contains = false;
-                for (size_t i = 0; i < params_size; ++i) {
+                for (auto i = 0zu; i < params_size; ++i) {
                     if (type == params->list[i].type_idx) {
                         contains = true;
                         break;
@@ -674,23 +676,16 @@ bool DexHelper::IsMethodMatch(size_t dex_id, uint32_t method_id, uint32_t return
     return true;
 }
 size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_view method_name,
-                                    const std::vector<std::string_view> &params_name,
-                                    size_t on_dex) const {
+                                    const std::vector<std::string_view> &params_name) const {
     std::vector<uint32_t> method_ids;
     method_ids.resize(readers_.size(), dex::kNoIndex);
     bool created = false;
-    for (auto dex_idx = size_t(-1); dex_idx < readers_.size() || dex_idx == size_t(-1); ++dex_idx) {
-        if (dex_idx == size_t(-1)) {
-            dex_idx = on_dex;
-        }
-        if (dex_idx == size_t(-1)) {
-            dex_idx = 0;
-        }
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         const auto &strs = strings_[dex_idx];
-        auto method_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), method_name);
+        auto method_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), method_name, utf8_less);
         if (method_name_iter == strs.cend() || *method_name_iter != method_name) continue;
         auto method_name_id = method_name_iter - strs.cbegin();
-        auto class_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), class_name);
+        auto class_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), class_name, utf8_less);
         if (class_name_iter == strs.cend() || *class_name_iter != class_name) continue;
         auto class_name_id = class_name_iter - strs.cbegin();
         auto class_id = type_cache_[dex_idx][class_name_id];
@@ -703,7 +698,7 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
             const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
             if (params && params->size != params_name.size()) continue;
             if (!params_name.empty() && !params) continue;
-            for (size_t i = 0; i < params_name.size(); ++i) {
+            for (auto i = 0zu; i < params_name.size(); ++i) {
                 if (strs[dex.TypeIds()[params->list[i].type_idx].descriptor_idx] !=
                     params_name[i]) {
                     continue;
@@ -716,7 +711,7 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
     }
     if (!created) return -1;
     auto index = method_indices_.size();
-    for (size_t dex_id = 0; dex_id < readers_.size(); ++dex_id) {
+    for (auto dex_id = 0zu; dex_id < readers_.size(); ++dex_id) {
         auto method_id = method_ids[dex_id];
         if (method_id != dex::kNoIndex) rev_method_indices_[dex_id][method_id] = index;
     }
@@ -724,19 +719,13 @@ size_t DexHelper::CreateMethodIndex(std::string_view class_name, std::string_vie
     return index;
 }
 
-size_t DexHelper::CreateClassIndex(std::string_view class_name, size_t on_dex) const {
+size_t DexHelper::CreateClassIndex(std::string_view class_name) const {
     std::vector<uint32_t> class_ids;
     class_ids.resize(readers_.size(), dex::kNoIndex);
     bool created = false;
-    for (auto dex_idx = size_t(-1); dex_idx < readers_.size() || dex_idx == size_t(-1); ++dex_idx) {
-        if (dex_idx == size_t(-1)) {
-            dex_idx = on_dex;
-        }
-        if (dex_idx == size_t(-1)) {
-            dex_idx = 0;
-        }
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         const auto &strs = strings_[dex_idx];
-        auto class_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), class_name);
+        auto class_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), class_name, utf8_less);
         if (class_name_iter == strs.cend() || *class_name_iter != class_name) continue;
         auto class_name_id = class_name_iter - strs.cbegin();
         auto class_id = type_cache_[dex_idx][class_name_id];
@@ -747,7 +736,7 @@ size_t DexHelper::CreateClassIndex(std::string_view class_name, size_t on_dex) c
     }
     if (!created) return -1;
     auto index = class_indices_.size();
-    for (size_t dex_id = 0; dex_id < readers_.size(); ++dex_id) {
+    for (auto dex_id = 0zu; dex_id < readers_.size(); ++dex_id) {
         auto class_id = class_ids[dex_id];
         if (class_id != dex::kNoIndex) rev_class_indices_[dex_id][class_id] = index;
     }
@@ -755,24 +744,17 @@ size_t DexHelper::CreateClassIndex(std::string_view class_name, size_t on_dex) c
     return index;
 }
 
-size_t DexHelper::CreateFieldIndex(std::string_view class_name, std::string_view field_name,
-                                   size_t on_dex) const {
+size_t DexHelper::CreateFieldIndex(std::string_view class_name, std::string_view field_name) const {
     std::vector<uint32_t> field_ids;
     field_ids.resize(readers_.size(), dex::kNoIndex);
 
     bool created = false;
-    for (auto dex_idx = size_t(-1); dex_idx < readers_.size() || dex_idx == size_t(-1); ++dex_idx) {
-        if (dex_idx == size_t(-1)) {
-            dex_idx = on_dex;
-        }
-        if (dex_idx == size_t(-1)) {
-            dex_idx = 0;
-        }
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         const auto &strs = strings_[dex_idx];
-        auto class_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), class_name);
+        auto class_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), class_name, utf8_less);
         if (class_name_iter == strs.cend() || *class_name_iter != class_name) continue;
         auto class_name_id = class_name_iter - strs.cbegin();
-        auto field_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), field_name);
+        auto field_name_iter = std::lower_bound(strs.cbegin(), strs.cend(), field_name, utf8_less);
         if (field_name_iter == strs.cend() || *field_name_iter != field_name) continue;
         auto field_name_id = field_name_iter - strs.cbegin();
         auto class_id = type_cache_[dex_idx][class_name_id];
@@ -786,7 +768,7 @@ size_t DexHelper::CreateFieldIndex(std::string_view class_name, std::string_view
     }
     if (!created) return -1;
     auto index = field_indices_.size();
-    for (size_t dex_id = 0; dex_id < readers_.size(); ++dex_id) {
+    for (auto dex_id = 0zu; dex_id < readers_.size(); ++dex_id) {
         auto field_id = field_ids[dex_id];
         if (field_id != dex::kNoIndex) rev_field_indices_[dex_id][field_id] = index;
     }
@@ -803,7 +785,7 @@ size_t DexHelper::CreateMethodIndex(size_t dex_idx, uint32_t method_id) const {
     std::vector<std::string_view> param_names;
     if (params) {
         param_names.reserve(params->size);
-        for (size_t i = 0; i < params->size; ++i) {
+        for (auto i = 0zu; i < params->size; ++i) {
             param_names.emplace_back(strs[dex.TypeIds()[params->list[i].type_idx].descriptor_idx]);
         }
     }
@@ -814,7 +796,7 @@ size_t DexHelper::CreateMethodIndex(size_t dex_idx, uint32_t method_id) const {
 size_t DexHelper::CreateClassIndex(size_t dex_idx, uint32_t class_id) const {
     const auto &dex = readers_[dex_idx];
     const auto &strs = strings_[dex_idx];
-    return CreateClassIndex(strs[dex.TypeIds()[class_id].descriptor_idx], dex_idx);
+    return CreateClassIndex(strs[dex.TypeIds()[class_id].descriptor_idx]);
 }
 
 size_t DexHelper::CreateFieldIndex(size_t dex_idx, uint32_t field_id) const {
@@ -822,13 +804,13 @@ size_t DexHelper::CreateFieldIndex(size_t dex_idx, uint32_t field_id) const {
     const auto &strs = strings_[dex_idx];
     const auto &field = dex.FieldIds()[field_id];
     return CreateFieldIndex(strs[dex.TypeIds()[field.class_idx].descriptor_idx],
-                            strs[field.name_idx], dex_idx);
+                            strs[field.name_idx]);
 }
 
 auto DexHelper::DecodeClass(size_t class_idx) const -> Class {
     if (class_idx >= class_indices_.size()) return {};
     auto &class_ids = class_indices_[class_idx];
-    for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         auto class_id = class_ids[dex_idx];
         if (class_id == dex::kNoIndex) continue;
         return {
@@ -841,7 +823,7 @@ auto DexHelper::DecodeClass(size_t class_idx) const -> Class {
 auto DexHelper::DecodeField(size_t field_idx) const -> Field {
     if (field_idx >= field_indices_.size()) return {};
     auto &field_ids = field_indices_[field_idx];
-    for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         auto field_id = field_ids[dex_idx];
         if (field_id == dex::kNoIndex) continue;
         const auto &dex = readers_[dex_idx];
@@ -862,7 +844,7 @@ auto DexHelper::DecodeField(size_t field_idx) const -> Field {
 auto DexHelper::DecodeMethod(size_t method_idx) const -> Method {
     if (method_idx >= method_indices_.size()) return {};
     auto &method_ids = method_indices_[method_idx];
-    for (size_t dex_idx = 0; dex_idx < readers_.size(); ++dex_idx) {
+    for (auto dex_idx = 0zu; dex_idx < readers_.size(); ++dex_idx) {
         auto method_id = method_ids[dex_idx];
         if (method_id == dex::kNoIndex) continue;
         const auto &dex = readers_[dex_idx];
@@ -871,8 +853,8 @@ auto DexHelper::DecodeMethod(size_t method_idx) const -> Method {
         std::vector<Class> parameters;
         auto param_off = dex.ProtoIds()[dex.MethodIds()[method_id].proto_idx].parameters_off;
         const auto *params = param_off ? dex.dataPtr<dex::TypeList>(param_off) : nullptr;
-        size_t params_size = params ? params->size : 0;
-        for (size_t i = 0; i < params_size; ++i) {
+        auto params_size = params ? params->size : 0zu;
+        for (auto i = 0zu; i < params_size; ++i) {
             parameters.emplace_back(Class{
                 .name = strs[dex.TypeIds()[params->list[i].type_idx].descriptor_idx],
             });
@@ -893,7 +875,7 @@ auto DexHelper::DecodeMethod(size_t method_idx) const -> Method {
 std::vector<size_t> DexHelper::GetPriority(const std::vector<size_t> &priority) const {
     std::vector<size_t> out;
     if (priority.empty()) {
-        for (size_t i = 0; i < readers_.size(); ++i) {
+        for (auto i = 0zu; i < readers_.size(); ++i) {
             out.emplace_back(i);
         }
     } else {

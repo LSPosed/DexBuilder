@@ -73,12 +73,10 @@ public:
         const Class return_type;
     };
 
-    size_t CreateClassIndex(std::string_view class_name, size_t on_dex = -1) const;
+    size_t CreateClassIndex(std::string_view class_name) const;
     size_t CreateMethodIndex(std::string_view class_name, std::string_view method_name,
-                             const std::vector<std::string_view> &params_name,
-                             size_t on_dex = -1) const;
-    size_t CreateFieldIndex(std::string_view class_name, std::string_view field_name,
-                            size_t on_dex = -1) const;
+                             const std::vector<std::string_view> &params_name) const;
+    size_t CreateFieldIndex(std::string_view class_name, std::string_view field_name) const;
 
     Class DecodeClass(size_t class_idx) const;
     Field DecodeField(size_t field_idx) const;
