@@ -8,18 +8,6 @@
 #include "slicer/dex_utf8.h"
 
 namespace {
-constexpr uint8_t opcode_len[] = {
-    1, 1, 2, 3, 1, 2, 3, 1, 2, 3, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 3, 2, 2, 3, 5, 2, 2, 3, 2, 1, 1, 2,
-    2, 1, 2, 2, 3, 3, 3, 1, 1, 2, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1,
-    1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 1, 3, 3, 3, 3, 3, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
-    2, 2, 2,
-    2, 2, 2, 2, 2, 2, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, // removed in Android 12
-    1, 1, 1, 1, 1, 1, 1, 4, 4, 3, 3, 2, 2};
-static_assert(sizeof(opcode_len) == 256);
 constexpr auto utf8_less = [](const std::string_view a, const std::string_view b) { return dex::Utf8Cmp(a.data(), b.data()) < 0; };
 }  // namespace
 
@@ -274,7 +262,7 @@ bool DexHelper::ScanMethod(size_t dex_idx, uint32_t method_id, size_t str_lower,
                 inst += (*reinterpret_cast<const dex::u4 *>(&inst[2]) * inst[1] + 1) / 2 + 3;
             }
         }
-        inst += opcode_len[opcode];
+        inst += dex::opcode_len[opcode];
     }
     return match_str;
 }
