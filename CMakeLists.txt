@@ -9,6 +9,7 @@ if (CCACHE)
 endif ()
 
 add_definitions(-std=c++20)
+add_subdirectory(external/parallel_hashmap)
 
 set(DB_SOURCES
         dex_builder.cc
@@ -33,14 +34,13 @@ set(CFLAGS
         )
 
 set(ABSL_PROPAGATE_CXX_STD ON)
-add_subdirectory(external/abseil)
 
 option(DEX_BUILDER_BUILD_SHARED "If ON, dex builder will also build shared library" ON)
 if (DEX_BUILDER_BUILD_SHARED)
     message(STATUS "Building dex builder as shared library")
     add_library(${PROJECT_NAME} SHARED ${DB_SOURCES})
     target_include_directories(${PROJECT_NAME} PUBLIC include)
-    target_link_libraries(${PROJECT_NAME} PUBLIC z log absl::flat_hash_map)
+    target_link_libraries(${PROJECT_NAME} PUBLIC z log phmap)
 
     add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E make_directory ${DEBUG_SYMBOLS_PATH}/${ANDROID_ABI}
@@ -54,7 +54,7 @@ endif()
 
 add_library(${PROJECT_NAME}_static STATIC ${DB_SOURCES})
 target_include_directories(${PROJECT_NAME}_static PUBLIC include)
-target_link_libraries(${PROJECT_NAME}_static PUBLIC z log absl::flat_hash_map)
+target_link_libraries(${PROJECT_NAME}_static PUBLIC z log phmap)
 
 if (NOT DEFINED DEBUG_SYMBOLS_PATH)
     set(DEBUG_SYMBOLS_PATH ${CMAKE_BINARY_DIR}/symbols)

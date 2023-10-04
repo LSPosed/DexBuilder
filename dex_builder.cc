@@ -66,14 +66,14 @@ const TypeDescriptor TypeDescriptor::ObjectFloat{"Ljava/lang/Float;"};
 const TypeDescriptor TypeDescriptor::ObjectLong{"Ljava/lang/Long;"};
 const TypeDescriptor TypeDescriptor::ObjectShort{"Ljava/lang/Short;"};
 
-const absl::flat_hash_map<TypeDescriptor, TypeDescriptor>
+const phmap::flat_hash_map<TypeDescriptor, TypeDescriptor>
     TypeDescriptor::unbox_map{
         {ObjectInt, Int},   {ObjectBoolean, Boolean}, {ObjectByte, Byte},
         {ObjectChar, Char}, {ObjectDouble, Double},   {ObjectFloat, Float},
         {ObjectLong, Long}, {ObjectShort, Short},
     };
 
-const absl::flat_hash_map<TypeDescriptor, std::string> value_method_map{
+const phmap::flat_hash_map<TypeDescriptor, std::string> value_method_map{
     {TypeDescriptor::ObjectInt, "intValue"},
     {TypeDescriptor::ObjectBoolean, "booleanValue"},
     {TypeDescriptor::ObjectByte, "byteValue"},

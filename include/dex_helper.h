@@ -1,7 +1,7 @@
 #pragma once
 
 #include <string_view>
-#include <absl/container/flat_hash_map.h>
+#include <parallel_hashmap/phmap.h>
 #include <vector>
 
 #include "slicer/reader.h"
@@ -128,9 +128,9 @@ private:
     // type_cache[dex][str_id] -> type_id
     std::vector<std::vector<uint32_t>> type_cache_;
     // field_cache[dex][type_id][str_id] -> method_ids
-    std::vector<std::vector<absl::flat_hash_map<uint32_t, std::vector<uint32_t>>>> method_cache_;
+    std::vector<std::vector<phmap::flat_hash_map<uint32_t, std::vector<uint32_t>>>> method_cache_;
     // field_cache[dex][type_id][str_id] -> field_id
-    std::vector<std::vector<absl::flat_hash_map<uint32_t, uint32_t>>> field_cache_;
+    std::vector<std::vector<phmap::flat_hash_map<uint32_t, uint32_t>>> field_cache_;
     // class_cache[dex][type_id] -> class_id
     std::vector<std::vector<uint32_t>> class_cache_;
 
