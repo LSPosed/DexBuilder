@@ -33,7 +33,9 @@ set(CFLAGS
         -fvisibility=default
         )
 
-set(ABSL_PROPAGATE_CXX_STD ON)
+if (NOT DEFINED DEBUG_SYMBOLS_PATH)
+    set(DEBUG_SYMBOLS_PATH ${CMAKE_BINARY_DIR}/symbols)
+endif()
 
 option(DEX_BUILDER_BUILD_SHARED "If ON, dex builder will also build shared library" ON)
 if (DEX_BUILDER_BUILD_SHARED)
@@ -55,7 +57,3 @@ endif()
 add_library(${PROJECT_NAME}_static STATIC ${DB_SOURCES})
 target_include_directories(${PROJECT_NAME}_static PUBLIC include)
 target_link_libraries(${PROJECT_NAME}_static PUBLIC z log phmap)
-
-if (NOT DEFINED DEBUG_SYMBOLS_PATH)
-    set(DEBUG_SYMBOLS_PATH ${CMAKE_BINARY_DIR}/symbols)
-endif()
