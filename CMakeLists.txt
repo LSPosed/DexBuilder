@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.4.1)
+cmake_minimum_required(VERSION 3.28)
 project(dex_builder)
 
 find_program(CCACHE ccache)
@@ -8,7 +8,9 @@ if (CCACHE)
     set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE})
 endif ()
 
-add_definitions(-std=c++20)
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+
 add_subdirectory(external/parallel_hashmap)
 
 set(DB_SOURCES
@@ -23,6 +25,10 @@ set(DB_SOURCES
         slicer/dex_bytecode.cc
         slicer/sha1.cpp
         )
+
+set(DB_MODULES
+    include/dex_builder.ixx
+    include/dex_helper.ixx)
 
 set(TEST_SOURCES
         dex_testcase_generator.cc
@@ -41,6 +47,7 @@ option(DEX_BUILDER_BUILD_SHARED "If ON, dex builder will also build shared libra
 if (DEX_BUILDER_BUILD_SHARED)
     message(STATUS "Building dex builder as shared library")
     add_library(${PROJECT_NAME} SHARED ${DB_SOURCES})
+    target_sources(${PROJECT_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${DB_MODULES})
     target_include_directories(${PROJECT_NAME} PUBLIC include)
     target_link_libraries(${PROJECT_NAME} PUBLIC z log phmap)
 
@@ -55,5 +62,6 @@ if (DEX_BUILDER_BUILD_SHARED)
 endif()
 
 add_library(${PROJECT_NAME}_static STATIC ${DB_SOURCES})
+target_sources(${PROJECT_NAME}_static PUBLIC FILE_SET CXX_MODULES FILES ${DB_MODULES})
 target_include_directories(${PROJECT_NAME}_static PUBLIC include)
 target_link_libraries(${PROJECT_NAME}_static PUBLIC z log phmap)
