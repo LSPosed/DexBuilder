@@ -8,8 +8,7 @@ if (CCACHE)
     set(CMAKE_C_COMPILER_LAUNCHER ${CCACHE})
 endif ()
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CXX_SCAN_FOR_MODULES ON)
+set(CMAKE_CXX_STANDARD 23)
 
 add_subdirectory(external/parallel_hashmap)
 
@@ -47,6 +46,7 @@ option(DEX_BUILDER_BUILD_SHARED "If ON, dex builder will also build shared libra
 if (DEX_BUILDER_BUILD_SHARED)
     message(STATUS "Building dex builder as shared library")
     add_library(${PROJECT_NAME} SHARED ${DB_SOURCES})
+    set_target_properties(${PROJECT_NAME} PROPERTIES CXX_SCAN_FOR_MODULES ON)
     target_sources(${PROJECT_NAME} PUBLIC FILE_SET CXX_MODULES FILES ${DB_MODULES})
     target_include_directories(${PROJECT_NAME} PUBLIC include)
     target_link_libraries(${PROJECT_NAME} PUBLIC z log phmap)
@@ -62,6 +62,7 @@ if (DEX_BUILDER_BUILD_SHARED)
 endif()
 
 add_library(${PROJECT_NAME}_static STATIC ${DB_SOURCES})
+set_target_properties(${PROJECT_NAME}_static PROPERTIES CXX_SCAN_FOR_MODULES ON)
 target_sources(${PROJECT_NAME}_static PUBLIC FILE_SET CXX_MODULES FILES ${DB_MODULES})
 target_include_directories(${PROJECT_NAME}_static PUBLIC include)
 target_link_libraries(${PROJECT_NAME}_static PUBLIC z log phmap)
