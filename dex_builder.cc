@@ -44,6 +44,8 @@ namespace dex {
 using std::string;
 
 using ::dex::kAccPublic;
+using ::dex::kAccAbstract;
+using ::dex::kAccNative;
 
 const TypeDescriptor TypeDescriptor::Int{"I"};
 const TypeDescriptor TypeDescriptor::Void{"V"};
@@ -379,30 +381,32 @@ ir::EncodedMethod *MethodBuilder::Encode() {
 
   method->access_flags = access_flags_;
 
-  auto *code = dex_file()->Alloc<ir::Code>();
-  assert(decl_->prototype != nullptr);
+  if ((access_flags_ & (kAccAbstract | kAccNative)) == 0) {
+    auto *code = dex_file()->Alloc<ir::Code>();
+    assert(decl_->prototype != nullptr);
 
-  size_t num_args = 0;
-  if (decl_->prototype->param_types != nullptr) {
-    for (auto &type : decl_->prototype->param_types->types) {
-      if (type->GetCategory() == ir::Type::Category::WideScalar) {
+    size_t num_args = 0;
+    if (decl_->prototype->param_types != nullptr) {
+      for (auto &type : decl_->prototype->param_types->types) {
+        if (type->GetCategory() == ir::Type::Category::WideScalar) {
+          num_args += 1;
+        }
         num_args += 1;
       }
-      num_args += 1;
     }
+    code->registers = NumRegisters() + num_args + kMaxScratchRegisters;
+    code->ins_count = num_args;
+    EncodeInstructions();
+    code->instructions =
+        slicer::ArrayView<const ::dex::u2>(buffer_.data(), buffer_.size());
+    size_t const return_count =
+        decl_->prototype->return_type ==
+                dex_file()->GetOrAddType(TypeDescriptor::Void)
+            ? 0
+            : 1;
+    code->outs_count = std::max(return_count, max_args_);
+    method->code = code;
   }
-  code->registers = NumRegisters() + num_args + kMaxScratchRegisters;
-  code->ins_count = num_args;
-  EncodeInstructions();
-  code->instructions =
-      slicer::ArrayView<const ::dex::u2>(buffer_.data(), buffer_.size());
-  size_t const return_count =
-      decl_->prototype->return_type ==
-              dex_file()->GetOrAddType(TypeDescriptor::Void)
-          ? 0
-          : 1;
-  code->outs_count = std::max(return_count, max_args_);
-  method->code = code;
 
   class_->direct_methods.push_back(method);
 
