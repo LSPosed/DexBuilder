@@ -1042,7 +1042,7 @@ void Writer::WriteEncodedMethod(const ir::EncodedMethod* ir_encoded_method,
   *base_index = ir_encoded_method->decl->index;
 
   auto ir_code = ir_encoded_method->code;
-  dex::u4 code_offset = ir_code->instructions.empty() ? 0 : FilePointer(ir_code);
+  dex::u4 code_offset = !ir_code || ir_code->instructions.empty() ? 0 : FilePointer(ir_code);
 
   auto& data = dex_->class_data;
   data.PushULeb128(index_delta);
