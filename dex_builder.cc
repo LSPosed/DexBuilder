@@ -387,6 +387,9 @@ ir::EncodedMethod *MethodBuilder::Encode() {
     assert(decl_->prototype != nullptr);
 
     size_t num_args = 0;
+    if ((access_flags_ & ::dex::kAccStatic) == 0) {
+      num_args += 1;
+    }
     if (decl_->prototype->param_types != nullptr) {
       for (auto &type : decl_->prototype->param_types->types) {
         if (type->GetCategory() == ir::Type::Category::WideScalar) {
@@ -417,7 +420,12 @@ ir::EncodedMethod *MethodBuilder::Encode() {
     method->code = code;
   }
 
-  class_->direct_methods.push_back(method);
+  bool is_direct = (access_flags_ & (::dex::kAccStatic | ::dex::kAccPrivate | ::dex::kAccConstructor)) != 0;
+  if (is_direct) {
+    class_->direct_methods.push_back(method);
+  } else {
+    class_->virtual_methods.push_back(method);
+  }
 
   return method;
 }
