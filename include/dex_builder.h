@@ -303,6 +303,13 @@ public:
     kAddInt,
     kXorInt,
     kBranchLtz,
+    kAndInt,
+    kUshrInt,
+    kCmpLong,
+    kLongToInt,
+    kArrayLength,
+    kBranchGe,
+    kGoto, // goto/16; branch offsets must fit in a signed 16-bit code-unit count.
   };
 
   ////////////////////////
@@ -686,6 +693,9 @@ private:
   void EncodeNewArray(const Instruction &instruction);
   void EncodeArrayOp(const Instruction &instruction);
   void EncodeIntBinary(const Instruction &instruction, ::dex::Opcode opcode);
+  void EncodeUnary12x(const Instruction &instruction, ::dex::Opcode opcode);
+  void EncodeBranch2(const Instruction &instruction, ::dex::Opcode opcode);
+  void EncodeGoto(const Instruction &instruction);
 
   // Low-level instruction format encoding. See
   // https://source.android.com/devices/tech/dalvik/instruction-formats for
