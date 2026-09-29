@@ -533,6 +533,12 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
     return EncodeBranch(::dex::Opcode::OP_IF_EQZ, instruction);
   case Instruction::Op::kBranchNEqz:
     return EncodeBranch(::dex::Opcode::OP_IF_NEZ, instruction);
+  case Instruction::Op::kBranchLtz:
+    return EncodeBranch(::dex::Opcode::OP_IF_LTZ, instruction);
+  case Instruction::Op::kAddInt:
+    return EncodeIntBinary(instruction, ::dex::Opcode::OP_ADD_INT);
+  case Instruction::Op::kXorInt:
+    return EncodeIntBinary(instruction, ::dex::Opcode::OP_XOR_INT);
   case Instruction::Op::kNew:
     return EncodeNew(instruction);
   case Instruction::Op::kNewArray:
@@ -547,7 +553,8 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
   case Instruction::Op::kSetInstanceField:
     return EncodeFieldOp(instruction);
   case Instruction::Op::kAputObject:
-    return EncodeAput(instruction);
+  case Instruction::Op::kAgetObject:
+    return EncodeArrayOp(instruction);
   }
 }
 
@@ -728,13 +735,27 @@ void MethodBuilder::EncodeNewArray(const Instruction &instruction) {
             RegisterValue(args[0]), type.value());
 }
 
-void MethodBuilder::EncodeAput(const Instruction &instruction) {
-  assert(Instruction::Op::kAputObject == instruction.opcode());
+void MethodBuilder::EncodeIntBinary(const Instruction &instruction,
+                                    ::dex::Opcode opcode) {
+  assert(instruction.dest().has_value());
+  assert(instruction.args().size() == 2);
+  Encode23x(opcode, RegisterValue(*instruction.dest()),
+            RegisterValue(instruction.args()[0]), RegisterValue(instruction.args()[1]));
+}
+
+void MethodBuilder::EncodeArrayOp(const Instruction &instruction) {
+  assert(Instruction::Op::kAputObject == instruction.opcode() ||
+         Instruction::Op::kAgetObject == instruction.opcode());
   assert(instruction.dest().has_value());
   assert(instruction.dest()->is_variable());
   assert(2 == instruction.args().size());
   const auto &args = instruction.args();
   switch (instruction.opcode()) {
+  case Instruction::Op::kAgetObject: {
+    Encode23x(::dex::Opcode::OP_AGET_OBJECT, RegisterValue(*instruction.dest()),
+              RegisterValue(args[0]), RegisterValue(args[1]));
+    break;
+  }
   case Instruction::Op::kAputObject: {
     Encode23x(::dex::Opcode::OP_APUT_OBJECT, RegisterValue(*instruction.dest()),
               RegisterValue(args[0]), RegisterValue(args[1]));
