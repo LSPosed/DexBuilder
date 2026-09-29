@@ -299,6 +299,10 @@ public:
     kSetStaticField,
     kSetStaticObjectField,
     kAputObject,
+    kAgetObject,
+    kAddInt,
+    kXorInt,
+    kBranchLtz,
   };
 
   ////////////////////////
@@ -638,6 +642,8 @@ public:
                                const Value &size);
   MethodBuilder &BuildAput(Instruction::Op opcode, const Value &target_array,
                            const Value &value, const Value &index);
+  MethodBuilder &BuildAgetObject(const Value &target, const Value &array,
+                                const Value &index);
   MethodBuilder &BuildBoxIfPrimitive(const Value &target,
                                      const TypeDescriptor &type,
                                      const Value &src);
@@ -678,7 +684,8 @@ private:
   void EncodeCast(const Instruction &instruction);
   void EncodeFieldOp(const Instruction &instruction);
   void EncodeNewArray(const Instruction &instruction);
-  void EncodeAput(const Instruction &instruction);
+  void EncodeArrayOp(const Instruction &instruction);
+  void EncodeIntBinary(const Instruction &instruction, ::dex::Opcode opcode);
 
   // Low-level instruction format encoding. See
   // https://source.android.com/devices/tech/dalvik/instruction-formats for
@@ -954,6 +961,13 @@ inline MethodBuilder &MethodBuilder::BuildAput(Op opcode,
                                                const Value &value,
                                                const Value &index) {
   AddInstruction(Instruction::OpWithArgs(opcode, value, target_array, index));
+  return *this;
+}
+
+inline MethodBuilder &MethodBuilder::BuildAgetObject(const Value &target,
+                                                    const Value &array,
+                                                    const Value &index) {
+  AddInstruction(Instruction::OpWithArgs(Op::kAgetObject, target, array, index));
   return *this;
 }
 
