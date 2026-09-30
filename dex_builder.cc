@@ -539,6 +539,20 @@ void MethodBuilder::EncodeInstruction(const Instruction &instruction) {
     return EncodeIntBinary(instruction, ::dex::Opcode::OP_ADD_INT);
   case Instruction::Op::kXorInt:
     return EncodeIntBinary(instruction, ::dex::Opcode::OP_XOR_INT);
+  case Instruction::Op::kAndInt:
+    return EncodeIntBinary(instruction, ::dex::Opcode::OP_AND_INT);
+  case Instruction::Op::kUshrInt:
+    return EncodeIntBinary(instruction, ::dex::Opcode::OP_USHR_INT);
+  case Instruction::Op::kCmpLong:
+    return EncodeIntBinary(instruction, ::dex::Opcode::OP_CMP_LONG);
+  case Instruction::Op::kLongToInt:
+    return EncodeUnary12x(instruction, ::dex::Opcode::OP_LONG_TO_INT);
+  case Instruction::Op::kArrayLength:
+    return EncodeUnary12x(instruction, ::dex::Opcode::OP_ARRAY_LENGTH);
+  case Instruction::Op::kBranchGe:
+    return EncodeBranch2(instruction, ::dex::Opcode::OP_IF_GE);
+  case Instruction::Op::kGoto:
+    return EncodeGoto(instruction);
   case Instruction::Op::kNew:
     return EncodeNew(instruction);
   case Instruction::Op::kNewArray:
@@ -696,6 +710,38 @@ void MethodBuilder::EncodeBranch(::dex::Opcode op,
   size_t field_offset = buffer_.size() + 1;
   Encode21c(op, RegisterValue(test_value),
             LabelValue(branch_target, instruction_offset, field_offset));
+}
+
+void MethodBuilder::EncodeUnary12x(const Instruction &instruction, ::dex::Opcode op) {
+  assert(instruction.dest().has_value());
+  assert(instruction.args().size() == 1);
+  const auto a = RegisterValue(*instruction.dest());
+  const auto b = RegisterValue(instruction.args()[0]);
+  assert(IsShortRegister(a));
+  assert(IsShortRegister(b));
+  buffer_.push_back(ToBits(op) | (a << 8) | (b << 12));
+}
+
+void MethodBuilder::EncodeBranch2(const Instruction &instruction, ::dex::Opcode op) {
+  assert(!instruction.dest().has_value());
+  assert(instruction.args().size() == 3);
+  const auto &args = instruction.args();
+  assert(args[2].is_label());
+  assert(IsShortRegister(RegisterValue(args[0])));
+  assert(IsShortRegister(RegisterValue(args[1])));
+  const size_t offset = buffer_.size();
+  Encode22c(op, RegisterValue(args[0]), RegisterValue(args[1]),
+            LabelValue(args[2], offset, offset + 1));
+}
+
+void MethodBuilder::EncodeGoto(const Instruction &instruction) {
+  assert(!instruction.dest().has_value());
+  assert(instruction.args().size() == 1);
+  assert(instruction.args()[0].is_label());
+  // Use a fixed-width signed 16-bit branch, including for forward labels.
+  const size_t offset = buffer_.size();
+  Encode21c(::dex::Opcode::OP_GOTO_16, 0,
+            LabelValue(instruction.args()[0], offset, offset + 1));
 }
 
 void MethodBuilder::EncodeNew(const Instruction &instruction) {
