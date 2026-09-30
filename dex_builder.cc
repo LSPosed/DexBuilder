@@ -368,7 +368,11 @@ ir::EncodedField *FieldBuilder::Encode() {
   auto *field = dex_file()->Alloc<ir::EncodedField>();
   field->decl = decl_;
   field->access_flags = access_flags_;
-  class_->static_fields.push_back(field);
+  if (access_flags_ & ::dex::kAccStatic) {
+    class_->static_fields.push_back(field);
+  } else {
+    class_->instance_fields.push_back(field);
+  }
   return field;
 }
 
@@ -845,8 +849,12 @@ void MethodBuilder::EncodeFieldOp(const Instruction &instruction) {
     assert(instruction.dest()->is_variable());
     assert(1 == instruction.args().size());
 
-    Encode22c(::dex::Opcode::OP_IGET, RegisterValue(*instruction.dest()),
-              RegisterValue(args[0]), instruction.index_argument());
+    Encode22c(instruction.result_is_object()
+                  ? ::dex::Opcode::OP_IGET_OBJECT
+                  : instruction.result_is_wide() ? ::dex::Opcode::OP_IGET_WIDE
+                                                 : ::dex::Opcode::OP_IGET,
+              RegisterValue(*instruction.dest()), RegisterValue(args[0]),
+              instruction.index_argument());
     break;
   }
   case Instruction::Op::kSetInstanceField: {
@@ -855,8 +863,11 @@ void MethodBuilder::EncodeFieldOp(const Instruction &instruction) {
     assert(args[0].is_variable());
     assert(args[1].is_variable());
 
-    Encode22c(::dex::Opcode::OP_IPUT, RegisterValue(args[1]),
-              RegisterValue(args[0]), instruction.index_argument());
+    Encode22c(instruction.result_is_object()
+                  ? ::dex::Opcode::OP_IPUT_OBJECT
+                  : instruction.result_is_wide() ? ::dex::Opcode::OP_IPUT_WIDE
+                                                 : ::dex::Opcode::OP_IPUT,
+              RegisterValue(args[1]), RegisterValue(args[0]), instruction.index_argument());
     break;
   }
   default: {

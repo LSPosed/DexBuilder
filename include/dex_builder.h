@@ -489,6 +489,12 @@ public:
                        /*result_is_object=*/false, false,    dest, object};
   }
 
+  static inline Instruction GetObjectField(size_t field_id, const Value &dest,
+                                           const Value &object) {
+    return Instruction{Op::kGetInstanceField,     field_id,
+                       /*result_is_object=*/true, false,    dest, object};
+  }
+
   static inline Instruction GetField(size_t field_id, const Value &dest,
                                      const Value &object, bool result_is_wide) {
     return Instruction{
@@ -505,6 +511,12 @@ public:
                        /*dest=*/{},
                        object,
                        value};
+  }
+
+  static inline Instruction SetObjectField(size_t field_id, const Value &object,
+                                           const Value &value) {
+    return Instruction{Op::kSetInstanceField,     field_id,
+                       /*result_is_object=*/true, false,    /*dest=*/{}, object, value};
   }
 
   static inline Instruction SetField(size_t field_id, const Value &object,
